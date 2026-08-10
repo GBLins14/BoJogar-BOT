@@ -6,14 +6,12 @@ import com.bojogar.bot.whatsapp.model.WebhookPayload
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
-import tools.jackson.databind.ObjectMapper
 
 @RestController
 @RequestMapping("/v1/api/webhook")
 class WebhookController(
     private val messageHandler: MessageHandler,
-    private val properties: WhatsAppProperties,
-    private val objectMapper: ObjectMapper
+    private val properties: WhatsAppProperties
 ) {
 
     companion object {
@@ -36,17 +34,13 @@ class WebhookController(
     }
 
     @PostMapping
-    fun receive(@RequestBody rawBody: String): ResponseEntity<Void> {
-        log.info("Webhook received — raw: {}", rawBody)
-
+    fun receive(@RequestBody payload: WebhookPayload): ResponseEntity<Void> {
+        log.info("Webhook received — {} entries", payload.entry.size)
         try {
-            val payload = objectMapper.readValue(rawBody, WebhookPayload::class.java)
-            log.info("Webhook parsed — {} entries", payload.entry.size)
             messageHandler.handle(payload)
         } catch (e: Exception) {
             log.error(">>> ERRO ao processar webhook: {}", e.message, e)
         }
-
         return ResponseEntity.ok().build()
     }
 }
