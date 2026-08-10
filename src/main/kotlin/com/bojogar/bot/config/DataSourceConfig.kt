@@ -3,35 +3,72 @@ package com.bojogar.bot.config
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import org.slf4j.LoggerFactory
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import java.net.URI
 import javax.sql.DataSource
 
 @Configuration
-@ConditionalOnProperty("database.url")
-class DataSourceConfig {
+@ConditionalOnProperty("DATABASE_URL")
+class DataSourceConfig(
+    @Value("\${DATABASE_URL}")
+    private val rawUrl: String
+) {
 
-    private val log = LoggerFactory.getLogger(javaClass)
+    companion object {
+        private val log = LoggerFactory.getLogger(DataSourceConfig::class.java)
+    }
 
     @Bean
-    fun dataSource(@Value("\${database.url}") databaseUrl: String): DataSource {
-        val uri = URI(databaseUrl)
-        val userInfo = uri.userInfo.split(":", limit = 2)
-        val query = if (uri.query != null) "?${uri.query}" else ""
-        val port = if (uri.port != -1) ":${uri.port}" else ""
-
-        val config = HikariConfig().apply {
-            jdbcUrl = "jdbc:postgresql://${uri.host}${port}${uri.path}${query}"
-            username = userInfo[0]
-            password = userInfo.getOrElse(1) { "" }
-            maximumPoolSize = 5
+    fun dataSource(): DataSource {
+        val normalizedUrl = when {
+            rawUrl.startsWith("jdbc:postgresql://") ->
+                rawUrl.removePrefix("jdbc:")
+            rawUrl.startsWith("postgresql://") ->
+                rawUrl
+            rawUrl.startsWith("postgres://") ->
+                "postgresql://${rawUrl.removePrefix("postgres://")}"
+            else ->
+                error("DATABASE_URL invalida. Esperado postgres://, postgresql:// ou jdbc:postgresql://")
         }
 
-        val dataSource = HikariDataSource(config)
-        log.info("DataSource configurado: {}", uri.host)
-        return dataSource
+        val uri = URI(normalizedUrl)
+        val userInfo = uri.userInfo ?: error("DATABASE_URL nao possui usuario e senha.")
+        val credentials = userInfo.split(":", limit = 2)
+
+        val jdbcUrl = buildString {
+            append("jdbc:postgresql://")
+            append(uri.host)
+            if (uri.port != -1) {
+                append(":")
+                append(uri.port)
+            }
+            append(uri.path)
+            if (!uri.query.isNullOrBlank()) {
+                append("?")
+                append(uri.query)
+            }
+        }
+
+        log.info("Conectando ao PostgreSQL: {}", jdbcUrl)
+
+        val hikari = HikariConfig().apply {
+            this.jdbcUrl = jdbcUrl
+            this.username = credentials[0]
+            this.password = credentials.getOrElse(1) { "" }
+            driverClassName = "org.postgresql.Driver"
+            maximumPoolSize = 3
+            minimumIdle = 1
+            connectionTimeout = 30_000
+            idleTimeout = 600_000
+            maxLifetime = 1_800_000
+            keepaliveTime = 60_000
+            validationTimeout = 5_000
+            isAutoCommit = true
+        }
+
+        return HikariDataSource(hikari)
     }
 }

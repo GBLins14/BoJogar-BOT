@@ -1,56 +1,48 @@
 package com.bojogar.bot.whatsapp.model
 
-import com.fasterxml.jackson.annotation.JsonProperty
-
 data class WebhookPayload(
-    @JsonProperty("object")
-    val objectType: String = "",
     val entry: List<WebhookEntry> = emptyList()
 )
 
 data class WebhookEntry(
-    val id: String = "",
+    val id: String? = null,
     val changes: List<WebhookChange> = emptyList()
 )
 
 data class WebhookChange(
-    val value: WebhookValue? = null,
-    val field: String = ""
+    val value: WebhookValue,
+    val field: String? = null
 )
 
 data class WebhookValue(
-    @JsonProperty("messaging_product")
-    val messagingProduct: String = "",
+    val messaging_product: String? = null,
     val metadata: WebhookMetadata? = null,
-    val contacts: List<WebhookContact> = emptyList(),
-    val messages: List<IncomingMessage> = emptyList()
+    val contacts: List<WebhookContact>? = null,
+    val messages: List<IncomingMessage>? = null
 )
 
 data class WebhookMetadata(
-    @JsonProperty("display_phone_number")
-    val displayPhoneNumber: String = "",
-    @JsonProperty("phone_number_id")
-    val phoneNumberId: String = ""
+    val display_phone_number: String? = null,
+    val phone_number_id: String? = null
 )
 
 data class WebhookContact(
     val profile: WebhookProfile? = null,
-    @JsonProperty("wa_id")
-    val waId: String = ""
+    val wa_id: String? = null
 )
 
 data class WebhookProfile(
-    val name: String = ""
+    val name: String? = null
 )
 
 data class IncomingMessage(
-    val from: String = "",
-    val id: String = "",
-    val timestamp: String = "",
+    val from: String,
+    val id: String,
+    val timestamp: String? = null,
     val text: MessageText? = null,
-    val type: String = ""
+    val type: String? = null
 )
 
 data class MessageText(
-    val body: String = ""
+    val body: String? = null
 )
