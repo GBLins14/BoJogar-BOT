@@ -40,9 +40,27 @@ data class IncomingMessage(
     val id: String,
     val timestamp: String? = null,
     val text: MessageText? = null,
-    val type: String? = null
+    val type: String? = null,
+    val interactive: WebhookInteractive? = null,
+    val button: WebhookButtonReply? = null
 )
 
 data class MessageText(
     val body: String? = null
+)
+
+data class WebhookInteractive(
+    val type: String? = null,
+    val button_reply: WebhookInteractiveReply? = null,
+    val list_reply: WebhookInteractiveReply? = null
+)
+
+data class WebhookInteractiveReply(
+    val id: String? = null,
+    val title: String? = null
+)
+
+data class WebhookButtonReply(
+    val payload: String? = null,
+    val text: String? = null
 )

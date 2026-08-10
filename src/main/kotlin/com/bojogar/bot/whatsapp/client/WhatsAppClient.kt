@@ -1,8 +1,8 @@
 package com.bojogar.bot.whatsapp.client
 
 import com.bojogar.bot.config.WhatsAppProperties
-import com.bojogar.bot.whatsapp.model.SendMessageRequest
-import com.bojogar.bot.whatsapp.model.TextContent
+import com.bojogar.bot.whatsapp.model.MarkAsReadPayload
+import com.bojogar.bot.whatsapp.model.MessagePayload
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.client.HttpClientErrorException
@@ -18,19 +18,14 @@ class WhatsAppClient(
         private val log = LoggerFactory.getLogger(WhatsAppClient::class.java)
     }
 
-    fun sendTextMessage(to: String, text: String) {
-        log.info("Sending [text] to {}", to)
-
-        val request = SendMessageRequest(
-            to = to,
-            text = TextContent(body = text)
-        )
+    fun sendPayload(payload: MessagePayload) {
+        log.info("Sending [{}] to {}", payload.type, payload.to)
 
         try {
             val response = whatsAppRestClient
                 .post()
                 .uri("/${properties.phoneNumberId}/messages")
-                .body(request)
+                .body(payload)
                 .retrieve()
                 .body(Map::class.java)
 
@@ -42,7 +37,22 @@ class WhatsAppClient(
         } catch (e: HttpClientErrorException) {
             log.error("WhatsApp API error [{}]: {}", e.statusCode, e.responseBodyAsString)
         } catch (e: Exception) {
-            log.error(">>> ERRO ao enviar mensagem para {}: {}", to, e.message, e)
+            log.error(">>> ERRO ao enviar mensagem para {}: {}", payload.to, e.message, e)
+        }
+    }
+
+    fun markAsRead(messageId: String) {
+        log.debug("Marking message {} as read", messageId)
+
+        try {
+            whatsAppRestClient
+                .post()
+                .uri("/${properties.phoneNumberId}/messages")
+                .body(MarkAsReadPayload(message_id = messageId))
+                .retrieve()
+                .toBodilessEntity()
+        } catch (e: Exception) {
+            log.warn("Failed to mark message as read: {}", e.message)
         }
     }
 }
