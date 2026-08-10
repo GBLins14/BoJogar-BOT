@@ -9,26 +9,37 @@ import org.springframework.stereotype.Component
 @Component
 class MessageHandler(private val whatsAppClient: WhatsAppClient) {
 
-    private val log = LoggerFactory.getLogger(javaClass)
+    companion object {
+        private val log = LoggerFactory.getLogger(MessageHandler::class.java)
+    }
 
     fun handle(payload: WebhookPayload) {
+        log.info("Processing webhook — {} entries", payload.entry.size)
+
         payload.entry.forEach { entry ->
-            entry.changes
-                .filter { it.field == "messages" }
-                .forEach { change ->
-                    change.value?.messages?.forEach { message ->
+            log.debug("Entry id: {} — {} changes", entry.id, entry.changes.size)
+
+            entry.changes.forEach { change ->
+                log.debug("Change field: {} — messages: {}", change.field, change.value.messages?.size ?: 0)
+
+                if (change.field == "messages") {
+                    change.value.messages?.forEach { message ->
                         processMessage(message)
                     }
                 }
+            }
         }
     }
 
     private fun processMessage(message: IncomingMessage) {
-        log.info("Mensagem recebida de {}: {}", message.from, message.text?.body)
+        log.info("Received [{}] from {}", message.type, message.from)
+        log.debug("Message id: {} — text: {}", message.id, message.text?.body)
         start(message.from)
     }
 
     private fun start(to: String) {
+        log.info("Sending /start welcome to {}", to)
+
         val text = """
             Fala! 🏐 Eu sou o *BoJogar*, seu assistente de peladas!
 

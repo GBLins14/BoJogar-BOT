@@ -6,5 +6,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 data class WhatsAppProperties(
     val token: String,
     val phoneNumberId: String,
-    val verifyToken: String
+    val verifyToken: String,
+    val apiVersion: String = "v22.0"
 )

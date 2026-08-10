@@ -14,7 +14,9 @@ class WebhookController(
     private val properties: WhatsAppProperties
 ) {
 
-    private val log = LoggerFactory.getLogger(javaClass)
+    companion object {
+        private val log = LoggerFactory.getLogger(WebhookController::class.java)
+    }
 
     @GetMapping
     fun verify(
@@ -22,17 +24,23 @@ class WebhookController(
         @RequestParam("hub.verify_token") token: String?,
         @RequestParam("hub.challenge") challenge: String?
     ): ResponseEntity<String> {
+        log.info("Webhook verification — mode: {}", mode)
         if (mode == "subscribe" && token == properties.verifyToken) {
-            log.info("Webhook verificado com sucesso")
+            log.info("Webhook verified successfully")
             return ResponseEntity.ok(challenge)
         }
-        log.warn("Falha na verificacao do webhook")
+        log.warn("Webhook verification failed — invalid token")
         return ResponseEntity.status(403).build()
     }
 
     @PostMapping
     fun receive(@RequestBody payload: WebhookPayload): ResponseEntity<Void> {
-        messageHandler.handle(payload)
+        log.debug("Webhook received — {} entries", payload.entry.size)
+        try {
+            messageHandler.handle(payload)
+        } catch (e: Exception) {
+            log.error(">>> ERRO ao processar webhook: {}", e.message, e)
+        }
         return ResponseEntity.ok().build()
     }
 }
