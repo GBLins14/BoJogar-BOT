@@ -13,8 +13,8 @@ class Pelada(
     val codigo: String,
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "organizador_id", nullable = false)
-    val organizador: Organizador,
+    @JoinColumn(name = "created_by_id", nullable = false)
+    val createdBy: User,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -38,5 +38,15 @@ class Pelada(
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    var status: StatusPelada = StatusPelada.ABERTA
+    var status: StatusPelada = StatusPelada.OPEN,
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "location_id")
+    var location: Location? = null,
+
+    @Column(columnDefinition = "text")
+    var sportConfig: String? = null,
+
+    @Version
+    val version: Long = 0
 ) : BaseEntity()

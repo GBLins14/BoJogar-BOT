@@ -1,23 +1,31 @@
 package com.bojogar.bot.whatsapp.handler
 
+import com.bojogar.bot.service.UserService
 import com.bojogar.bot.whatsapp.command.CommandContext
 import com.bojogar.bot.whatsapp.command.CommandProcessor
 import com.bojogar.bot.whatsapp.model.IncomingMessage
 import com.bojogar.bot.whatsapp.model.WebhookPayload
 import com.bojogar.bot.whatsapp.service.WhatsAppService
+import com.bojogar.bot.whatsapp.session.ConversationState
+import com.bojogar.bot.whatsapp.session.SessionManager
 import org.slf4j.LoggerFactory
+import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
 
 @Component
 class MessageHandler(
     private val commandProcessor: CommandProcessor,
-    private val whatsappService: WhatsAppService
+    private val whatsappService: WhatsAppService,
+    private val sessionManager: SessionManager,
+    private val userService: UserService
 ) {
 
     companion object {
         private val log = LoggerFactory.getLogger(MessageHandler::class.java)
+        private val PELADA_CODE_PATTERN = Regex("^[A-Za-z0-9]{6}$")
     }
 
+    @Async
     fun handle(payload: WebhookPayload) {
         log.info("Processing webhook — {} entries", payload.entry.size)
 
@@ -41,6 +49,13 @@ class MessageHandler(
 
     private fun processMessage(message: IncomingMessage, senderName: String) {
         log.info("Received [{}] from {} ({})", message.type, senderName, message.from)
+
+        // Auto-create user on every interaction
+        try {
+            userService.findOrCreate(message.from, senderName)
+        } catch (e: Exception) {
+            log.warn("Failed to auto-create user {}: {}", message.from, e.message)
+        }
 
         // Extract raw message from text or interactive reply
         val rawMessage = when (message.type) {
@@ -72,11 +87,8 @@ class MessageHandler(
             rawMessage = rawMessage
         )
 
-        // Try to process as command, fallback to /start
-        if (!commandProcessor.process(context)) {
-            log.info("No command matched, falling back to /start for {}", message.from)
-            commandProcessor.process(context.copy(rawMessage = "/start"))
-        }
+        // Route the message
+        routeMessage(context, rawMessage.trim())
 
         // Mark as read
         try {
@@ -84,5 +96,52 @@ class MessageHandler(
         } catch (e: Exception) {
             log.warn("Failed to mark message as read: {}", e.message)
         }
+    }
+
+    private fun routeMessage(context: CommandContext, rawMessage: String) {
+        // 1. Explicit command (starts with /)
+        if (rawMessage.startsWith("/")) {
+            sessionManager.clear(context.from)
+            if (!commandProcessor.process(context)) {
+                log.info("No command matched, falling back to /start for {}", context.from)
+                commandProcessor.process(context.copy(rawMessage = "/start"))
+            }
+            return
+        }
+
+        // 2. Active session — route to appropriate handler
+        val session = sessionManager.getSession(context.from)
+        if (session != null && session.state != ConversationState.IDLE) {
+            when (session.state) {
+                ConversationState.CREATING_PELADA -> {
+                    val nextField = session.nextField ?: "esporte"
+                    commandProcessor.process(context.copy(rawMessage = "/criar input_$nextField $rawMessage"))
+                }
+                ConversationState.ENTERING_CODE -> {
+                    sessionManager.clear(context.from)
+                    commandProcessor.process(context.copy(rawMessage = "/entrar ${rawMessage.uppercase()}"))
+                }
+                ConversationState.EDITING_PELADA -> {
+                    val code = session.currentPeladaCode ?: ""
+                    val field = session.nextField ?: ""
+                    commandProcessor.process(context.copy(rawMessage = "/gerenciar editar_campo $code $field $rawMessage"))
+                }
+                else -> {
+                    commandProcessor.process(context.copy(rawMessage = "/start"))
+                }
+            }
+            return
+        }
+
+        // 3. Check if message looks like a pelada invite code
+        if (PELADA_CODE_PATTERN.matches(rawMessage)) {
+            log.info("Detected possible pelada code: {}", rawMessage)
+            commandProcessor.process(context.copy(rawMessage = "/entrar ${rawMessage.uppercase()}"))
+            return
+        }
+
+        // 4. Fallback to /start
+        log.info("No command or session, falling back to /start for {}", context.from)
+        commandProcessor.process(context.copy(rawMessage = "/start"))
     }
 }

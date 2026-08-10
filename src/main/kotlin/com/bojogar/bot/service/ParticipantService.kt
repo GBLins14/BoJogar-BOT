@@ -1,0 +1,284 @@
+package com.bojogar.bot.service
+
+import com.bojogar.bot.entity.Pagamento
+import com.bojogar.bot.entity.Pelada
+import com.bojogar.bot.entity.PeladaParticipant
+import com.bojogar.bot.enums.ParticipantRole
+import com.bojogar.bot.enums.ParticipantStatus
+import com.bojogar.bot.enums.StatusPelada
+import com.bojogar.bot.repository.PagamentoRepository
+import com.bojogar.bot.repository.PeladaParticipantRepository
+import com.bojogar.bot.repository.PeladaRepository
+import com.bojogar.bot.repository.UserRepository
+import com.bojogar.bot.util.PhoneUtils
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import java.math.BigDecimal
+import java.util.UUID
+
+// --- Result types ---
+
+sealed interface JoinResult {
+    data class Confirmed(val participant: PeladaParticipant) : JoinResult
+    data class Waitlisted(val participant: PeladaParticipant, val position: Int) : JoinResult
+    data object AlreadyJoined : JoinResult
+    data object PeladaClosed : JoinResult
+    data class Error(val message: String) : JoinResult
+}
+
+sealed interface LeaveResult {
+    data class Left(val promoted: PeladaParticipant?) : LeaveResult
+    data object NotFound : LeaveResult
+    data class Error(val message: String) : LeaveResult
+}
+
+sealed interface RemoveResult {
+    data class Removed(val promoted: PeladaParticipant?) : RemoveResult
+    data object NotFound : RemoveResult
+    data object Unauthorized : RemoveResult
+    data class Error(val message: String) : RemoveResult
+}
+
+@Service
+class ParticipantService(
+    private val participantRepository: PeladaParticipantRepository,
+    private val peladaRepository: PeladaRepository,
+    private val userRepository: UserRepository,
+    private val pagamentoRepository: PagamentoRepository
+) {
+
+    companion object {
+        private val log = LoggerFactory.getLogger(ParticipantService::class.java)
+    }
+
+    @Transactional
+    fun join(phone: String, peladaCode: String): JoinResult {
+        val normalized = PhoneUtils.normalizePhone(phone)
+        val pelada = peladaRepository.findByCodigo(peladaCode.uppercase())
+            ?: return JoinResult.Error("Pelada nao encontrada: $peladaCode")
+
+        if (pelada.status !in listOf(StatusPelada.OPEN, StatusPelada.FULL)) {
+            return JoinResult.PeladaClosed
+        }
+
+        val user = userRepository.findByPhone(normalized)
+            ?: return JoinResult.Error("Usuario nao encontrado")
+
+        val existing = participantRepository.findByPeladaIdAndUserId(pelada.id!!, user.id!!)
+        if (existing != null && existing.status in listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST)) {
+            return JoinResult.AlreadyJoined
+        }
+
+        return synchronized(peladaCode.uppercase().intern()) {
+            val confirmedCount = participantRepository.countByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.CONFIRMED)
+            val hasSlot = confirmedCount < pelada.limiteJogadores
+
+            if (hasSlot) {
+                val participant = participantRepository.save(
+                    PeladaParticipant(
+                        user = user,
+                        pelada = pelada,
+                        role = ParticipantRole.PLAYER,
+                        displayName = user.name,
+                        status = ParticipantStatus.CONFIRMED
+                    )
+                )
+
+                createPaymentIfNeeded(participant, pelada)
+
+                // Auto-transition to FULL
+                if (confirmedCount + 1 >= pelada.limiteJogadores && pelada.status == StatusPelada.OPEN) {
+                    pelada.status = StatusPelada.FULL
+                    peladaRepository.save(pelada)
+                    log.info("Pelada {} is now FULL", peladaCode)
+                }
+
+                log.info("User {} joined pelada {} as CONFIRMED", normalized, peladaCode)
+                JoinResult.Confirmed(participant)
+            } else {
+                val waitlistCount = participantRepository.countByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.WAITLIST)
+                val position = (waitlistCount + 1).toInt()
+
+                val participant = participantRepository.save(
+                    PeladaParticipant(
+                        user = user,
+                        pelada = pelada,
+                        role = ParticipantRole.PLAYER,
+                        displayName = user.name,
+                        status = ParticipantStatus.WAITLIST,
+                        waitlistPosition = position
+                    )
+                )
+
+                log.info("User {} added to waitlist #{} for pelada {}", normalized, position, peladaCode)
+                JoinResult.Waitlisted(participant, position)
+            }
+        }
+    }
+
+    @Transactional
+    fun leave(phone: String, peladaCode: String): LeaveResult {
+        val normalized = PhoneUtils.normalizePhone(phone)
+        val participant = participantRepository.findByUserPhoneAndPeladaCodigo(normalized, peladaCode.uppercase())
+            ?: return LeaveResult.NotFound
+
+        if (participant.role == ParticipantRole.OWNER) {
+            return LeaveResult.Error("O organizador nao pode sair da pelada. Use /gerenciar cancelar para cancelar.")
+        }
+
+        if (participant.status !in listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST)) {
+            return LeaveResult.NotFound
+        }
+
+        val wasConfirmed = participant.status == ParticipantStatus.CONFIRMED
+        participant.status = ParticipantStatus.CANCELLED
+        participant.waitlistPosition = null
+        participantRepository.save(participant)
+
+        var promoted: PeladaParticipant? = null
+        if (wasConfirmed) {
+            promoted = promoteFromWaitlist(participant.pelada.id!!)
+            updatePeladaStatusAfterLeave(participant.pelada)
+        } else {
+            recalculateWaitlistPositions(participant.pelada.id!!)
+        }
+
+        log.info("User {} left pelada {}", normalized, peladaCode)
+        return LeaveResult.Left(promoted)
+    }
+
+    @Transactional
+    fun removeParticipant(requesterPhone: String, targetPhone: String, peladaCode: String): RemoveResult {
+        val normalizedRequester = PhoneUtils.normalizePhone(requesterPhone)
+        val normalizedTarget = PhoneUtils.normalizePhone(targetPhone)
+
+        val requester = participantRepository.findByUserPhoneAndPeladaCodigo(normalizedRequester, peladaCode.uppercase())
+            ?: return RemoveResult.Unauthorized
+
+        if (!requester.role.hasAuthority(ParticipantRole.ADMIN)) {
+            return RemoveResult.Unauthorized
+        }
+
+        val target = participantRepository.findByUserPhoneAndPeladaCodigo(normalizedTarget, peladaCode.uppercase())
+            ?: return RemoveResult.NotFound
+
+        if (target.role == ParticipantRole.OWNER) {
+            return RemoveResult.Error("Nao e possivel remover o organizador")
+        }
+
+        val wasConfirmed = target.status == ParticipantStatus.CONFIRMED
+        target.status = ParticipantStatus.REMOVED
+        target.waitlistPosition = null
+        participantRepository.save(target)
+
+        var promoted: PeladaParticipant? = null
+        if (wasConfirmed) {
+            promoted = promoteFromWaitlist(target.pelada.id!!)
+            updatePeladaStatusAfterLeave(target.pelada)
+        } else {
+            recalculateWaitlistPositions(target.pelada.id!!)
+        }
+
+        log.info("User {} removed {} from pelada {}", normalizedRequester, normalizedTarget, peladaCode)
+        return RemoveResult.Removed(promoted)
+    }
+
+    fun promoteFromWaitlist(peladaId: UUID): PeladaParticipant? {
+        val waitlisted = participantRepository.findByPeladaIdAndStatusOrderByWaitlistPositionAsc(
+            peladaId, ParticipantStatus.WAITLIST
+        )
+
+        val first = waitlisted.firstOrNull() ?: return null
+        first.status = ParticipantStatus.CONFIRMED
+        first.waitlistPosition = null
+        participantRepository.save(first)
+
+        recalculateWaitlistPositions(peladaId)
+
+        log.info("Promoted user {} from waitlist for pelada {}", first.user.phone, peladaId)
+        return first
+    }
+
+    fun getParticipants(peladaCode: String): List<PeladaParticipant> {
+        val pelada = peladaRepository.findByCodigo(peladaCode.uppercase()) ?: return emptyList()
+        return participantRepository.findByPeladaId(pelada.id!!)
+    }
+
+    fun getActiveParticipants(peladaCode: String): List<PeladaParticipant> {
+        return getParticipants(peladaCode).filter {
+            it.status in listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST)
+        }
+    }
+
+    fun getUserRole(phone: String, peladaCode: String): ParticipantRole? {
+        val normalized = PhoneUtils.normalizePhone(phone)
+        val participant = participantRepository.findByUserPhoneAndPeladaCodigo(normalized, peladaCode.uppercase())
+        return if (participant != null && participant.status in listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST)) {
+            participant.role
+        } else null
+    }
+
+    @Transactional
+    fun assignRole(requesterPhone: String, targetPhone: String, peladaCode: String, role: ParticipantRole): Boolean {
+        val normalizedRequester = PhoneUtils.normalizePhone(requesterPhone)
+        val normalizedTarget = PhoneUtils.normalizePhone(targetPhone)
+
+        val requester = participantRepository.findByUserPhoneAndPeladaCodigo(normalizedRequester, peladaCode.uppercase())
+            ?: return false
+
+        if (!requester.role.hasAuthority(ParticipantRole.OWNER)) return false
+        if (role == ParticipantRole.OWNER) return false
+
+        val target = participantRepository.findByUserPhoneAndPeladaCodigo(normalizedTarget, peladaCode.uppercase())
+            ?: return false
+
+        target.role = role
+        participantRepository.save(target)
+
+        log.info("User {} role changed to {} in pelada {} by {}", normalizedTarget, role, peladaCode, normalizedRequester)
+        return true
+    }
+
+    fun getUserParticipations(phone: String, activeOnly: Boolean = true): List<PeladaParticipant> {
+        val normalized = PhoneUtils.normalizePhone(phone)
+        val statuses = if (activeOnly) {
+            listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST)
+        } else {
+            ParticipantStatus.entries
+        }
+        return participantRepository.findByUserPhoneAndStatusIn(normalized, statuses)
+    }
+
+    private fun createPaymentIfNeeded(participant: PeladaParticipant, pelada: Pelada) {
+        if (pelada.valorPorJogador > BigDecimal.ZERO) {
+            pagamentoRepository.save(
+                Pagamento(
+                    participant = participant,
+                    valor = pelada.valorPorJogador
+                )
+            )
+        }
+    }
+
+    private fun updatePeladaStatusAfterLeave(pelada: Pelada) {
+        if (pelada.status == StatusPelada.FULL) {
+            val confirmed = participantRepository.countByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.CONFIRMED)
+            if (confirmed < pelada.limiteJogadores) {
+                pelada.status = StatusPelada.OPEN
+                peladaRepository.save(pelada)
+                log.info("Pelada {} back to OPEN ({}/{})", pelada.codigo, confirmed, pelada.limiteJogadores)
+            }
+        }
+    }
+
+    private fun recalculateWaitlistPositions(peladaId: UUID) {
+        val waitlisted = participantRepository.findByPeladaIdAndStatusOrderByWaitlistPositionAsc(
+            peladaId, ParticipantStatus.WAITLIST
+        )
+        waitlisted.forEachIndexed { index, p ->
+            p.waitlistPosition = index + 1
+            participantRepository.save(p)
+        }
+    }
+}

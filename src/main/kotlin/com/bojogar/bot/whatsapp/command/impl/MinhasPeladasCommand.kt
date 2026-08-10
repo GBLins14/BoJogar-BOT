@@ -1,5 +1,12 @@
 package com.bojogar.bot.whatsapp.command.impl
 
+import com.bojogar.bot.enums.ParticipantStatus
+import com.bojogar.bot.enums.StatusPelada
+import com.bojogar.bot.service.AuthorizationService
+import com.bojogar.bot.service.LeaveResult
+import com.bojogar.bot.service.NotificationService
+import com.bojogar.bot.service.ParticipantService
+import com.bojogar.bot.service.PeladaService
 import com.bojogar.bot.whatsapp.command.BotCommand
 import com.bojogar.bot.whatsapp.command.CommandContext
 import com.bojogar.bot.whatsapp.model.Button
@@ -7,11 +14,25 @@ import com.bojogar.bot.whatsapp.model.ListRow
 import com.bojogar.bot.whatsapp.model.ListSection
 import com.bojogar.bot.whatsapp.service.WhatsAppService
 import org.springframework.stereotype.Component
+import java.math.BigDecimal
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Component
-class MinhasPeladasCommand : BotCommand {
+class MinhasPeladasCommand(
+    private val participantService: ParticipantService,
+    private val peladaService: PeladaService,
+    private val authorizationService: AuthorizationService,
+    private val notificationService: NotificationService
+) : BotCommand {
 
     override val name = "/minhas"
+
+    companion object {
+        private val DATE_FMT_SHORT = DateTimeFormatter.ofPattern("EEE dd/MM - HH'h'", Locale("pt", "BR"))
+        private val DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
+    }
 
     override fun execute(context: CommandContext, whatsappService: WhatsAppService) {
         val sub = context.args.firstOrNull()
@@ -42,73 +63,118 @@ class MinhasPeladasCommand : BotCommand {
     }
 
     private fun showProximas(context: CommandContext, ws: WhatsAppService) {
+        val participations = participantService.getUserParticipations(context.from)
+            .filter { it.pelada.dataHora.isAfter(LocalDateTime.now()) }
+            .filter { it.pelada.status in listOf(StatusPelada.OPEN, StatusPelada.FULL) }
+
+        if (participations.isEmpty()) {
+            ws.sendMessage(context.from, "\uD83D\uDCC5 Voce nao esta inscrito em nenhuma pelada.")
+            ws.sendButtons(
+                to = context.from,
+                body = "O que deseja fazer?",
+                buttons = listOf(
+                    Button(id = "/peladas proximas", title = "Ver Peladas"),
+                    Button(id = "/criar", title = "Criar Pelada"),
+                    Button(id = "/start", title = "Menu Inicial")
+                )
+            )
+            return
+        }
+
+        val confirmed = participations.filter { it.status == ParticipantStatus.CONFIRMED }
+        val waitlisted = participations.filter { it.status == ParticipantStatus.WAITLIST }
+
+        val sections = mutableListOf<ListSection>()
+
+        if (confirmed.isNotEmpty()) {
+            sections.add(
+                ListSection(
+                    title = "Confirmadas",
+                    rows = confirmed.take(10).map { p ->
+                        ListRow(
+                            id = "/minhas ver ${p.pelada.codigo}",
+                            title = "${p.pelada.esporte.label} - ${p.pelada.local.take(20)}",
+                            description = "${p.pelada.dataHora.format(DATE_FMT_SHORT)} | Confirmado"
+                        )
+                    }
+                )
+            )
+        }
+
+        if (waitlisted.isNotEmpty()) {
+            sections.add(
+                ListSection(
+                    title = "Lista de Espera",
+                    rows = waitlisted.take(10).map { p ->
+                        ListRow(
+                            id = "/minhas ver ${p.pelada.codigo}",
+                            title = "${p.pelada.esporte.label} - ${p.pelada.local.take(20)}",
+                            description = "${p.pelada.dataHora.format(DATE_FMT_SHORT)} | Posicao #${p.waitlistPosition ?: "?"}"
+                        )
+                    }
+                )
+            )
+        }
+
         ws.sendList(
             to = context.from,
             header = "Minhas Proximas Peladas",
-            body = "\uD83D\uDCC5 Peladas que voce esta inscrito:",
+            body = "\uD83D\uDCC5 ${participations.size} pelada(s) inscrito:",
             buttonLabel = "Ver Peladas",
-            sections = listOf(
-                ListSection(
-                    title = "Confirmadas",
-                    rows = listOf(
-                        ListRow(
-                            id = "/minhas ver PEL01",
-                            title = "Futevolei - Boa Viagem",
-                            description = "Ter 12/08 - 19h | Pago"
-                        ),
-                        ListRow(
-                            id = "/minhas ver PEL03",
-                            title = "Futevolei - Candeias",
-                            description = "Seg 18/08 - 17h | Pendente"
-                        )
-                    )
-                ),
-                ListSection(
-                    title = "Lista de Espera",
-                    rows = listOf(
-                        ListRow(
-                            id = "/minhas ver PEL02",
-                            title = "Volei - Pina",
-                            description = "Qua 13/08 - 18h | Posicao #2"
-                        )
-                    )
-                )
-            ),
+            sections = sections,
             footer = "BoJogar"
         )
     }
 
     private fun showDetalhes(context: CommandContext, ws: WhatsAppService) {
-        val codigo = context.args.getOrNull(1) ?: "PEL01"
+        val codigo = context.args.getOrNull(1)
+        if (codigo == null) {
+            showProximas(context, ws)
+            return
+        }
+
+        val pelada = peladaService.findByCode(codigo)
+        if (pelada == null) {
+            ws.sendMessage(context.from, "\u26A0\uFE0F Pelada *$codigo* nao encontrada.")
+            return
+        }
+
+        val role = participantService.getUserRole(context.from, codigo)
+        val statusLabel = when (role) {
+            null -> "Nao inscrito"
+            else -> {
+                val pp = participantService.getParticipants(codigo)
+                    .find { it.user.phone == com.bojogar.bot.util.PhoneUtils.normalizePhone(context.from) }
+                pp?.status?.name ?: "Desconhecido"
+            }
+        }
 
         ws.sendMessage(
             context.from,
             buildString {
                 append("\uD83D\uDCCB *Minha Inscricao — $codigo*\n\n")
-                append("\uD83C\uDFD0 *Pelada:* Futevolei - Boa Viagem\n")
-                append("\uD83D\uDCC5 *Data:* Terca, 12/08/2026\n")
-                append("\u23F0 *Horario:* 19:00 - 21:00\n")
-                append("\uD83D\uDCCD *Local:* Quadra Arena Beach\n")
-                append("\uD83D\uDCB0 *Valor:* R$ 25,00\n")
-                append("\u2705 *Status:* Confirmado\n")
-                append("\uD83D\uDCB3 *Pagamento:* Pago")
+                append("\uD83C\uDFD0 *Pelada:* ${pelada.esporte.label} - ${pelada.local}\n")
+                append("\uD83D\uDCC5 *Data:* ${pelada.dataHora.format(DATE_FMT)}\n")
+                append("\uD83D\uDCB0 *Valor:* ${if (pelada.valorPorJogador > BigDecimal.ZERO) "R$ ${pelada.valorPorJogador}" else "Gratis"}\n")
+                append("\u2705 *Status:* $statusLabel")
             }
         )
 
-        ws.sendButtons(
-            to = context.from,
-            body = "O que deseja fazer?",
-            buttons = listOf(
-                Button(id = "/minhas cancelar $codigo", title = "Cancelar Inscricao"),
-                Button(id = "/minhas proximas", title = "Voltar"),
-                Button(id = "/start", title = "Menu Inicial")
-            )
-        )
+        val buttons = mutableListOf<Button>()
+
+        if (authorizationService.isAdminOrOwner(context.from, codigo)) {
+            buttons.add(Button(id = "/gerenciar pelada $codigo", title = "Gerenciar"))
+        } else {
+            buttons.add(Button(id = "/minhas cancelar $codigo", title = "Cancelar Inscricao"))
+        }
+        buttons.add(Button(id = "/minhas proximas", title = "Voltar"))
+        if (buttons.size < 3) buttons.add(Button(id = "/start", title = "Menu Inicial"))
+
+        ws.sendButtons(to = context.from, body = "O que deseja fazer?", buttons = buttons.take(3))
     }
 
     private fun showCancelar(context: CommandContext, ws: WhatsAppService) {
-        val codigo = context.args.getOrNull(1) ?: "PEL01"
-
+        val codigo = context.args.getOrNull(1) ?: return
         ws.sendButtons(
             to = context.from,
             header = "Cancelar Inscricao",
@@ -121,16 +187,32 @@ class MinhasPeladasCommand : BotCommand {
     }
 
     private fun confirmarCancelamento(context: CommandContext, ws: WhatsAppService) {
-        val codigo = context.args.getOrNull(1) ?: "PEL01"
+        val codigo = context.args.getOrNull(1) ?: return
 
-        ws.sendMessage(
-            context.from,
-            buildString {
-                append("\u274C *Inscricao Cancelada*\n\n")
-                append("Sua inscricao na pelada *$codigo* foi cancelada com sucesso.\n")
-                append("Caso tenha direito a reembolso, o organizador entrara em contato.")
+        when (val result = participantService.leave(context.from, codigo)) {
+            is LeaveResult.Left -> {
+                ws.sendMessage(
+                    context.from,
+                    buildString {
+                        append("\u274C *Inscricao Cancelada*\n\n")
+                        append("Sua inscricao na pelada *$codigo* foi cancelada com sucesso.\n")
+                        append("Caso tenha direito a reembolso, o organizador entrara em contato.")
+                    }
+                )
+                if (result.promoted != null) {
+                    val pelada = peladaService.findByCode(codigo)
+                    if (pelada != null) {
+                        notificationService.notifyWaitlistPromotion(result.promoted, pelada)
+                    }
+                }
             }
-        )
+            is LeaveResult.NotFound -> {
+                ws.sendMessage(context.from, "\u26A0\uFE0F Inscricao nao encontrada.")
+            }
+            is LeaveResult.Error -> {
+                ws.sendMessage(context.from, "\u274C ${result.message}")
+            }
+        }
 
         ws.sendButtons(
             to = context.from,
@@ -143,17 +225,29 @@ class MinhasPeladasCommand : BotCommand {
     }
 
     private fun showHistorico(context: CommandContext, ws: WhatsAppService) {
-        ws.sendMessage(
-            context.from,
-            buildString {
-                append("\uD83D\uDCCA *Historico de Peladas*\n\n")
-                append("1. \u2705 Futevolei - Boa Viagem | 05/08 | R$ 25\n")
-                append("2. \u2705 Volei - Pina | 01/08 | R$ 20\n")
-                append("3. \u274C Futevolei - Candeias | 28/07 | Cancelado\n")
-                append("4. \u2705 Futevolei - Boa Viagem | 22/07 | R$ 25\n\n")
-                append("_Total: 4 peladas | 3 participadas_")
-            }
-        )
+        val all = participantService.getUserParticipations(context.from, activeOnly = false)
+        val past = all.filter {
+            it.pelada.dataHora.isBefore(LocalDateTime.now()) ||
+                it.pelada.status in listOf(StatusPelada.FINISHED, StatusPelada.CANCELLED) ||
+                it.status in listOf(ParticipantStatus.CANCELLED, ParticipantStatus.REMOVED)
+        }
+
+        if (past.isEmpty()) {
+            ws.sendMessage(context.from, "\uD83D\uDCCA *Historico*\n\nVoce ainda nao participou de nenhuma pelada.")
+        } else {
+            ws.sendMessage(
+                context.from,
+                buildString {
+                    append("\uD83D\uDCCA *Historico de Peladas*\n\n")
+                    past.take(10).forEachIndexed { i, p ->
+                        val icon = if (p.status == ParticipantStatus.CONFIRMED) "\u2705" else "\u274C"
+                        val price = if (p.pelada.valorPorJogador > BigDecimal.ZERO) "R$ ${p.pelada.valorPorJogador}" else "Gratis"
+                        append("${i + 1}. $icon ${p.pelada.esporte.label} - ${p.pelada.local.take(15)} | ${p.pelada.dataHora.format(DateTimeFormatter.ofPattern("dd/MM"))} | $price\n")
+                    }
+                    append("\n_Total: ${past.size} pelada(s)_")
+                }
+            )
+        }
 
         ws.sendButtons(
             to = context.from,

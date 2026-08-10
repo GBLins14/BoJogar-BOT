@@ -6,5 +6,7 @@ import java.util.UUID
 
 interface PagamentoRepository : JpaRepository<Pagamento, UUID> {
 
-    fun findByInscricaoId(inscricaoId: UUID): List<Pagamento>
+    fun findByParticipantId(participantId: UUID): List<Pagamento>
+
+    fun findByParticipantPeladaCodigo(codigo: String): List<Pagamento>
 }
