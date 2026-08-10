@@ -2,7 +2,6 @@ package com.bojogar.bot.config
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import org.flywaydb.core.Flyway
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.beans.factory.annotation.Value
@@ -32,30 +31,7 @@ class DataSourceConfig {
         }
 
         val dataSource = HikariDataSource(config)
-
-        log.info("Executando migrations Flyway...")
-
-        // Limpa baseline que pulou a V1 no deploy anterior
-        try {
-            dataSource.connection.use { conn ->
-                conn.createStatement().execute(
-                    "DELETE FROM flyway_schema_history WHERE type = 'BASELINE'"
-                )
-            }
-        } catch (_: Exception) {
-            // flyway_schema_history ainda nao existe
-        }
-
-        Flyway.configure()
-            .dataSource(dataSource)
-            .locations("classpath:db/migration")
-            .baselineOnMigrate(true)
-            .baselineVersion("0")
-            .load()
-            .migrate()
-
-        log.info("Migrations Flyway concluidas")
-
+        log.info("DataSource configurado: {}", uri.host)
         return dataSource
     }
 }
