@@ -37,6 +37,7 @@ class DataSourceConfig {
         Flyway.configure()
             .dataSource(dataSource)
             .locations("classpath:db/migration")
+            .baselineOnMigrate(true)
             .load()
             .migrate()
         log.info("Migrations Flyway concluidas")
