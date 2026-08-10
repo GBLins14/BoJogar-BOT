@@ -2,6 +2,8 @@ package com.bojogar.bot.config
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import org.flywaydb.core.Flyway
+import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -12,6 +14,8 @@ import javax.sql.DataSource
 @Configuration
 @ConditionalOnProperty("database.url")
 class DataSourceConfig {
+
+    private val log = LoggerFactory.getLogger(javaClass)
 
     @Bean
     fun dataSource(@Value("\${database.url}") databaseUrl: String): DataSource {
@@ -27,6 +31,16 @@ class DataSourceConfig {
             maximumPoolSize = 5
         }
 
-        return HikariDataSource(config)
+        val dataSource = HikariDataSource(config)
+
+        log.info("Executando migrations Flyway...")
+        Flyway.configure()
+            .dataSource(dataSource)
+            .locations("classpath:db/migration")
+            .load()
+            .migrate()
+        log.info("Migrations Flyway concluidas")
+
+        return dataSource
     }
 }
