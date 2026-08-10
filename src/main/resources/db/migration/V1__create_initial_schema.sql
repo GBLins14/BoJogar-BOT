@@ -1,4 +1,4 @@
-CREATE TABLE organizadores (
+CREATE TABLE IF NOT EXISTS organizadores (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nome VARCHAR(255) NOT NULL,
     telefone VARCHAR(20) NOT NULL UNIQUE,
@@ -7,7 +7,7 @@ CREATE TABLE organizadores (
     atualizado_em TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE peladas (
+CREATE TABLE IF NOT EXISTS peladas (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     codigo VARCHAR(10) NOT NULL UNIQUE,
     organizador_id UUID NOT NULL REFERENCES organizadores(id),
@@ -23,7 +23,7 @@ CREATE TABLE peladas (
     atualizado_em TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE jogadores (
+CREATE TABLE IF NOT EXISTS jogadores (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nome VARCHAR(255) NOT NULL,
     telefone VARCHAR(20) NOT NULL UNIQUE,
@@ -31,7 +31,7 @@ CREATE TABLE jogadores (
     atualizado_em TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE inscricoes (
+CREATE TABLE IF NOT EXISTS inscricoes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     pelada_id UUID NOT NULL REFERENCES peladas(id),
     jogador_id UUID NOT NULL REFERENCES jogadores(id),
@@ -42,7 +42,7 @@ CREATE TABLE inscricoes (
     UNIQUE (pelada_id, jogador_id)
 );
 
-CREATE TABLE pagamentos (
+CREATE TABLE IF NOT EXISTS pagamentos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     inscricao_id UUID NOT NULL REFERENCES inscricoes(id),
     valor NUMERIC(10, 2) NOT NULL,
@@ -52,8 +52,8 @@ CREATE TABLE pagamentos (
     atualizado_em TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_peladas_organizador_id ON peladas(organizador_id);
-CREATE INDEX idx_peladas_status ON peladas(status);
-CREATE INDEX idx_inscricoes_pelada_id ON inscricoes(pelada_id);
-CREATE INDEX idx_inscricoes_jogador_id ON inscricoes(jogador_id);
-CREATE INDEX idx_pagamentos_inscricao_id ON pagamentos(inscricao_id);
+CREATE INDEX IF NOT EXISTS idx_peladas_organizador_id ON peladas(organizador_id);
+CREATE INDEX IF NOT EXISTS idx_peladas_status ON peladas(status);
+CREATE INDEX IF NOT EXISTS idx_inscricoes_pelada_id ON inscricoes(pelada_id);
+CREATE INDEX IF NOT EXISTS idx_inscricoes_jogador_id ON inscricoes(jogador_id);
+CREATE INDEX IF NOT EXISTS idx_pagamentos_inscricao_id ON pagamentos(inscricao_id);

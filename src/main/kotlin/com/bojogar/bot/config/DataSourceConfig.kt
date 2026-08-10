@@ -34,12 +34,26 @@ class DataSourceConfig {
         val dataSource = HikariDataSource(config)
 
         log.info("Executando migrations Flyway...")
+
+        // Limpa baseline que pulou a V1 no deploy anterior
+        try {
+            dataSource.connection.use { conn ->
+                conn.createStatement().execute(
+                    "DELETE FROM flyway_schema_history WHERE type = 'BASELINE'"
+                )
+            }
+        } catch (_: Exception) {
+            // flyway_schema_history ainda nao existe
+        }
+
         Flyway.configure()
             .dataSource(dataSource)
             .locations("classpath:db/migration")
             .baselineOnMigrate(true)
+            .baselineVersion("0")
             .load()
             .migrate()
+
         log.info("Migrations Flyway concluidas")
 
         return dataSource
