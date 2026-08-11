@@ -13,7 +13,7 @@ class Pelada(
     val codigo: String,
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by_id", nullable = false)
+    @JoinColumn(name = "organizador_id", nullable = false)
     val createdBy: User,
 
     @Enumerated(EnumType.STRING)
