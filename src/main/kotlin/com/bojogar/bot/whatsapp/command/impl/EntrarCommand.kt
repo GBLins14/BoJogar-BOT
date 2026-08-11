@@ -61,16 +61,14 @@ class EntrarCommand(
             return
         }
 
-        val remaining = peladaService.getRemainingSlots(pelada)
-
         ws.sendMessage(
             context.from,
             buildString {
-                append("\uD83C\uDFD0 *${pelada.esporte.label} — ${pelada.codigo}*\n\n")
+                append("\uD83C\uDFD0 *${pelada.esporteLabel} — ${pelada.codigo}*\n\n")
                 if (!pelada.descricao.isNullOrBlank()) append("\uD83D\uDCDD ${pelada.descricao}\n")
                 append("\uD83D\uDCCD *Local:* ${pelada.local}\n")
                 append("\uD83D\uDCC5 *Data:* ${pelada.dataHora.format(DATE_FMT)}\n")
-                append("\uD83D\uDC65 *Vagas:* $remaining/${pelada.limiteJogadores} restantes\n")
+                append("\uD83D\uDC65 *Vagas:* ${pelada.remainingSlots}/${pelada.limiteJogadores} restantes\n")
                 if (pelada.valorPorJogador > java.math.BigDecimal.ZERO) {
                     append("\uD83D\uDCB0 *Valor:* R$ ${pelada.valorPorJogador}\n")
                     if (!pelada.chavePix.isNullOrBlank()) {
@@ -95,12 +93,12 @@ class EntrarCommand(
     private fun confirmJoin(context: CommandContext, ws: WhatsAppService, code: String) {
         when (val result = participantService.join(context.from, code)) {
             is JoinResult.Confirmed -> {
-                val pelada = peladaService.findByCode(code)!!
+                val pelada = result.pelada
                 ws.sendMessage(
                     context.from,
                     buildString {
                         append("\u2705 *Inscricao Confirmada!*\n\n")
-                        append("Pelada *${pelada.codigo}* — ${pelada.esporte.label}\n")
+                        append("Pelada *${pelada.codigo}* — ${pelada.esporteLabel}\n")
                         append("\uD83D\uDCCD ${pelada.local}\n")
                         append("\uD83D\uDCC5 ${pelada.dataHora.format(DATE_FMT)}\n")
                         if (pelada.valorPorJogador > java.math.BigDecimal.ZERO) {

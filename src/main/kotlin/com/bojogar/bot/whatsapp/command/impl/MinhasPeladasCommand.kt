@@ -1,12 +1,13 @@
 package com.bojogar.bot.whatsapp.command.impl
 
-import com.bojogar.bot.enums.ParticipantStatus
-import com.bojogar.bot.enums.StatusPelada
+import com.bojogar.bot.dto.response.ParticipantResponse
+import com.bojogar.bot.dto.response.PeladaResponse
 import com.bojogar.bot.service.AuthorizationService
 import com.bojogar.bot.service.LeaveResult
 import com.bojogar.bot.service.NotificationService
 import com.bojogar.bot.service.ParticipantService
 import com.bojogar.bot.service.PeladaService
+import com.bojogar.bot.util.PhoneUtils
 import com.bojogar.bot.whatsapp.command.BotCommand
 import com.bojogar.bot.whatsapp.command.CommandContext
 import com.bojogar.bot.whatsapp.model.Button
@@ -64,10 +65,16 @@ class MinhasPeladasCommand(
 
     private fun showProximas(context: CommandContext, ws: WhatsAppService) {
         val participations = participantService.getUserParticipations(context.from)
-            .filter { it.pelada.dataHora.isAfter(LocalDateTime.now()) }
-            .filter { it.pelada.status in listOf(StatusPelada.OPEN, StatusPelada.FULL) }
+        val peladaMap = fetchPeladaMap(participations)
 
-        if (participations.isEmpty()) {
+        val upcoming = participations.filter { p ->
+            val pelada = peladaMap[p.peladaCodigo]
+            pelada != null &&
+                pelada.dataHora.isAfter(LocalDateTime.now()) &&
+                pelada.status in listOf("OPEN", "FULL")
+        }
+
+        if (upcoming.isEmpty()) {
             ws.sendMessage(context.from, "\uD83D\uDCC5 Voce nao esta inscrito em nenhuma pelada.")
             ws.sendButtons(
                 to = context.from,
@@ -81,8 +88,8 @@ class MinhasPeladasCommand(
             return
         }
 
-        val confirmed = participations.filter { it.status == ParticipantStatus.CONFIRMED }
-        val waitlisted = participations.filter { it.status == ParticipantStatus.WAITLIST }
+        val confirmed = upcoming.filter { it.status == "CONFIRMED" }
+        val waitlisted = upcoming.filter { it.status == "WAITLIST" }
 
         val sections = mutableListOf<ListSection>()
 
@@ -90,11 +97,12 @@ class MinhasPeladasCommand(
             sections.add(
                 ListSection(
                     title = "Confirmadas",
-                    rows = confirmed.take(10).map { p ->
+                    rows = confirmed.take(10).mapNotNull { p ->
+                        val pel = peladaMap[p.peladaCodigo] ?: return@mapNotNull null
                         ListRow(
-                            id = "/minhas ver ${p.pelada.codigo}",
-                            title = "${p.pelada.esporte.label} - ${p.pelada.local.take(20)}",
-                            description = "${p.pelada.dataHora.format(DATE_FMT_SHORT)} | Confirmado"
+                            id = "/minhas ver ${p.peladaCodigo}",
+                            title = "${pel.esporteLabel} - ${pel.local.take(20)}",
+                            description = "${pel.dataHora.format(DATE_FMT_SHORT)} | Confirmado"
                         )
                     }
                 )
@@ -105,11 +113,12 @@ class MinhasPeladasCommand(
             sections.add(
                 ListSection(
                     title = "Lista de Espera",
-                    rows = waitlisted.take(10).map { p ->
+                    rows = waitlisted.take(10).mapNotNull { p ->
+                        val pel = peladaMap[p.peladaCodigo] ?: return@mapNotNull null
                         ListRow(
-                            id = "/minhas ver ${p.pelada.codigo}",
-                            title = "${p.pelada.esporte.label} - ${p.pelada.local.take(20)}",
-                            description = "${p.pelada.dataHora.format(DATE_FMT_SHORT)} | Posicao #${p.waitlistPosition ?: "?"}"
+                            id = "/minhas ver ${p.peladaCodigo}",
+                            title = "${pel.esporteLabel} - ${pel.local.take(20)}",
+                            description = "${pel.dataHora.format(DATE_FMT_SHORT)} | Posicao #${p.waitlistPosition ?: "?"}"
                         )
                     }
                 )
@@ -119,7 +128,7 @@ class MinhasPeladasCommand(
         ws.sendList(
             to = context.from,
             header = "Minhas Proximas Peladas",
-            body = "\uD83D\uDCC5 ${participations.size} pelada(s) inscrito:",
+            body = "\uD83D\uDCC5 ${upcoming.size} pelada(s) inscrito:",
             buttonLabel = "Ver Peladas",
             sections = sections,
             footer = "BoJogar"
@@ -139,21 +148,16 @@ class MinhasPeladasCommand(
             return
         }
 
-        val role = participantService.getUserRole(context.from, codigo)
-        val statusLabel = when (role) {
-            null -> "Nao inscrito"
-            else -> {
-                val pp = participantService.getParticipants(codigo)
-                    .find { it.user.phone == com.bojogar.bot.util.PhoneUtils.normalizePhone(context.from) }
-                pp?.status?.name ?: "Desconhecido"
-            }
-        }
+        val participants = participantService.getParticipants(codigo)
+        val normalized = PhoneUtils.normalizePhone(context.from)
+        val myParticipation = participants.find { it.userPhone == normalized }
+        val statusLabel = myParticipation?.status ?: "Nao inscrito"
 
         ws.sendMessage(
             context.from,
             buildString {
                 append("\uD83D\uDCCB *Minha Inscricao — $codigo*\n\n")
-                append("\uD83C\uDFD0 *Pelada:* ${pelada.esporte.label} - ${pelada.local}\n")
+                append("\uD83C\uDFD0 *Pelada:* ${pelada.esporteLabel} - ${pelada.local}\n")
                 append("\uD83D\uDCC5 *Data:* ${pelada.dataHora.format(DATE_FMT)}\n")
                 append("\uD83D\uDCB0 *Valor:* ${if (pelada.valorPorJogador > BigDecimal.ZERO) "R$ ${pelada.valorPorJogador}" else "Gratis"}\n")
                 append("\u2705 *Status:* $statusLabel")
@@ -226,10 +230,15 @@ class MinhasPeladasCommand(
 
     private fun showHistorico(context: CommandContext, ws: WhatsAppService) {
         val all = participantService.getUserParticipations(context.from, activeOnly = false)
-        val past = all.filter {
-            it.pelada.dataHora.isBefore(LocalDateTime.now()) ||
-                it.pelada.status in listOf(StatusPelada.FINISHED, StatusPelada.CANCELLED) ||
-                it.status in listOf(ParticipantStatus.CANCELLED, ParticipantStatus.REMOVED)
+        val peladaMap = fetchPeladaMap(all)
+
+        val past = all.filter { p ->
+            val pelada = peladaMap[p.peladaCodigo]
+            pelada != null && (
+                pelada.dataHora.isBefore(LocalDateTime.now()) ||
+                    pelada.status in listOf("FINISHED", "CANCELLED") ||
+                    p.status in listOf("CANCELLED", "REMOVED")
+                )
         }
 
         if (past.isEmpty()) {
@@ -240,9 +249,10 @@ class MinhasPeladasCommand(
                 buildString {
                     append("\uD83D\uDCCA *Historico de Peladas*\n\n")
                     past.take(10).forEachIndexed { i, p ->
-                        val icon = if (p.status == ParticipantStatus.CONFIRMED) "\u2705" else "\u274C"
-                        val price = if (p.pelada.valorPorJogador > BigDecimal.ZERO) "R$ ${p.pelada.valorPorJogador}" else "Gratis"
-                        append("${i + 1}. $icon ${p.pelada.esporte.label} - ${p.pelada.local.take(15)} | ${p.pelada.dataHora.format(DateTimeFormatter.ofPattern("dd/MM"))} | $price\n")
+                        val pel = peladaMap[p.peladaCodigo] ?: return@forEachIndexed
+                        val icon = if (p.status == "CONFIRMED") "\u2705" else "\u274C"
+                        val price = if (pel.valorPorJogador > BigDecimal.ZERO) "R$ ${pel.valorPorJogador}" else "Gratis"
+                        append("${i + 1}. $icon ${pel.esporteLabel} - ${pel.local.take(15)} | ${pel.dataHora.format(DateTimeFormatter.ofPattern("dd/MM"))} | $price\n")
                     }
                     append("\n_Total: ${past.size} pelada(s)_")
                 }
@@ -257,5 +267,11 @@ class MinhasPeladasCommand(
                 Button(id = "/start", title = "Menu Inicial")
             )
         )
+    }
+
+    private fun fetchPeladaMap(participations: List<ParticipantResponse>): Map<String, PeladaResponse> {
+        return participations.map { it.peladaCodigo }.distinct()
+            .mapNotNull { code -> peladaService.findByCode(code)?.let { code to it } }
+            .toMap()
     }
 }

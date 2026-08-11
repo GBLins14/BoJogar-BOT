@@ -1,11 +1,14 @@
 package com.bojogar.bot.service
 
+import com.bojogar.bot.dto.response.ParticipantResponse
+import com.bojogar.bot.dto.response.PeladaResponse
 import com.bojogar.bot.entity.Pagamento
-import com.bojogar.bot.entity.Pelada
 import com.bojogar.bot.entity.PeladaParticipant
 import com.bojogar.bot.enums.ParticipantRole
 import com.bojogar.bot.enums.ParticipantStatus
 import com.bojogar.bot.enums.StatusPelada
+import com.bojogar.bot.mapper.ParticipantMapper
+import com.bojogar.bot.mapper.PeladaMapper
 import com.bojogar.bot.repository.PagamentoRepository
 import com.bojogar.bot.repository.PeladaParticipantRepository
 import com.bojogar.bot.repository.PeladaRepository
@@ -17,24 +20,24 @@ import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.util.UUID
 
-// --- Result types ---
+// --- Result types (DTOs inside) ---
 
 sealed interface JoinResult {
-    data class Confirmed(val participant: PeladaParticipant) : JoinResult
-    data class Waitlisted(val participant: PeladaParticipant, val position: Int) : JoinResult
+    data class Confirmed(val participant: ParticipantResponse, val pelada: PeladaResponse) : JoinResult
+    data class Waitlisted(val pelada: PeladaResponse, val position: Int) : JoinResult
     data object AlreadyJoined : JoinResult
     data object PeladaClosed : JoinResult
     data class Error(val message: String) : JoinResult
 }
 
 sealed interface LeaveResult {
-    data class Left(val promoted: PeladaParticipant?) : LeaveResult
+    data class Left(val promoted: ParticipantResponse?) : LeaveResult
     data object NotFound : LeaveResult
     data class Error(val message: String) : LeaveResult
 }
 
 sealed interface RemoveResult {
-    data class Removed(val promoted: PeladaParticipant?) : RemoveResult
+    data class Removed(val promoted: ParticipantResponse?) : RemoveResult
     data object NotFound : RemoveResult
     data object Unauthorized : RemoveResult
     data class Error(val message: String) : RemoveResult
@@ -45,7 +48,9 @@ class ParticipantService(
     private val participantRepository: PeladaParticipantRepository,
     private val peladaRepository: PeladaRepository,
     private val userRepository: UserRepository,
-    private val pagamentoRepository: PagamentoRepository
+    private val pagamentoRepository: PagamentoRepository,
+    private val participantMapper: ParticipantMapper,
+    private val peladaMapper: PeladaMapper
 ) {
 
     companion object {
@@ -87,7 +92,6 @@ class ParticipantService(
 
                 createPaymentIfNeeded(participant, pelada)
 
-                // Auto-transition to FULL
                 if (confirmedCount + 1 >= pelada.limiteJogadores && pelada.status == StatusPelada.OPEN) {
                     pelada.status = StatusPelada.FULL
                     peladaRepository.save(pelada)
@@ -95,12 +99,12 @@ class ParticipantService(
                 }
 
                 log.info("User {} joined pelada {} as CONFIRMED", normalized, peladaCode)
-                JoinResult.Confirmed(participant)
+                JoinResult.Confirmed(participantMapper.toResponse(participant), peladaMapper.toResponse(pelada))
             } else {
                 val waitlistCount = participantRepository.countByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.WAITLIST)
                 val position = (waitlistCount + 1).toInt()
 
-                val participant = participantRepository.save(
+                participantRepository.save(
                     PeladaParticipant(
                         user = user,
                         pelada = pelada,
@@ -112,7 +116,7 @@ class ParticipantService(
                 )
 
                 log.info("User {} added to waitlist #{} for pelada {}", normalized, position, peladaCode)
-                JoinResult.Waitlisted(participant, position)
+                JoinResult.Waitlisted(peladaMapper.toResponse(pelada), position)
             }
         }
     }
@@ -136,7 +140,7 @@ class ParticipantService(
         participant.waitlistPosition = null
         participantRepository.save(participant)
 
-        var promoted: PeladaParticipant? = null
+        var promoted: ParticipantResponse? = null
         if (wasConfirmed) {
             promoted = promoteFromWaitlist(participant.pelada.id!!)
             updatePeladaStatusAfterLeave(participant.pelada)
@@ -172,7 +176,7 @@ class ParticipantService(
         target.waitlistPosition = null
         participantRepository.save(target)
 
-        var promoted: PeladaParticipant? = null
+        var promoted: ParticipantResponse? = null
         if (wasConfirmed) {
             promoted = promoteFromWaitlist(target.pelada.id!!)
             updatePeladaStatusAfterLeave(target.pelada)
@@ -184,33 +188,20 @@ class ParticipantService(
         return RemoveResult.Removed(promoted)
     }
 
-    fun promoteFromWaitlist(peladaId: UUID): PeladaParticipant? {
-        val waitlisted = participantRepository.findByPeladaIdAndStatusOrderByWaitlistPositionAsc(
-            peladaId, ParticipantStatus.WAITLIST
-        )
-
-        val first = waitlisted.firstOrNull() ?: return null
-        first.status = ParticipantStatus.CONFIRMED
-        first.waitlistPosition = null
-        participantRepository.save(first)
-
-        recalculateWaitlistPositions(peladaId)
-
-        log.info("Promoted user {} from waitlist for pelada {}", first.user.phone, peladaId)
-        return first
-    }
-
-    fun getParticipants(peladaCode: String): List<PeladaParticipant> {
+    @Transactional(readOnly = true)
+    fun getParticipants(peladaCode: String): List<ParticipantResponse> {
         val pelada = peladaRepository.findByCodigo(peladaCode.uppercase()) ?: return emptyList()
-        return participantRepository.findByPeladaId(pelada.id!!)
+        return participantRepository.findByPeladaId(pelada.id!!).map { participantMapper.toResponse(it) }
     }
 
-    fun getActiveParticipants(peladaCode: String): List<PeladaParticipant> {
+    @Transactional(readOnly = true)
+    fun getActiveParticipants(peladaCode: String): List<ParticipantResponse> {
         return getParticipants(peladaCode).filter {
-            it.status in listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST)
+            it.status in listOf(ParticipantStatus.CONFIRMED.name, ParticipantStatus.WAITLIST.name)
         }
     }
 
+    @Transactional(readOnly = true)
     fun getUserRole(phone: String, peladaCode: String): ParticipantRole? {
         val normalized = PhoneUtils.normalizePhone(phone)
         val participant = participantRepository.findByUserPhoneAndPeladaCodigo(normalized, peladaCode.uppercase())
@@ -240,7 +231,8 @@ class ParticipantService(
         return true
     }
 
-    fun getUserParticipations(phone: String, activeOnly: Boolean = true): List<PeladaParticipant> {
+    @Transactional(readOnly = true)
+    fun getUserParticipations(phone: String, activeOnly: Boolean = true): List<ParticipantResponse> {
         val normalized = PhoneUtils.normalizePhone(phone)
         val statuses = if (activeOnly) {
             listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST)
@@ -248,20 +240,34 @@ class ParticipantService(
             ParticipantStatus.entries
         }
         return participantRepository.findByUserPhoneAndStatusIn(normalized, statuses)
+            .map { participantMapper.toResponse(it) }
     }
 
-    private fun createPaymentIfNeeded(participant: PeladaParticipant, pelada: Pelada) {
+    private fun promoteFromWaitlist(peladaId: UUID): ParticipantResponse? {
+        val waitlisted = participantRepository.findByPeladaIdAndStatusOrderByWaitlistPositionAsc(
+            peladaId, ParticipantStatus.WAITLIST
+        )
+
+        val first = waitlisted.firstOrNull() ?: return null
+        first.status = ParticipantStatus.CONFIRMED
+        first.waitlistPosition = null
+        participantRepository.save(first)
+
+        recalculateWaitlistPositions(peladaId)
+
+        log.info("Promoted user {} from waitlist for pelada {}", first.user.phone, peladaId)
+        return participantMapper.toResponse(first)
+    }
+
+    private fun createPaymentIfNeeded(participant: PeladaParticipant, pelada: com.bojogar.bot.entity.Pelada) {
         if (pelada.valorPorJogador > BigDecimal.ZERO) {
             pagamentoRepository.save(
-                Pagamento(
-                    participant = participant,
-                    valor = pelada.valorPorJogador
-                )
+                Pagamento(participant = participant, valor = pelada.valorPorJogador)
             )
         }
     }
 
-    private fun updatePeladaStatusAfterLeave(pelada: Pelada) {
+    private fun updatePeladaStatusAfterLeave(pelada: com.bojogar.bot.entity.Pelada) {
         if (pelada.status == StatusPelada.FULL) {
             val confirmed = participantRepository.countByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.CONFIRMED)
             if (confirmed < pelada.limiteJogadores) {

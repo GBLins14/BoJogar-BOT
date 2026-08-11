@@ -1,8 +1,7 @@
 package com.bojogar.bot.whatsapp.command.impl
 
-import com.bojogar.bot.enums.ParticipantStatus
-import com.bojogar.bot.enums.StatusPelada
 import com.bojogar.bot.service.ParticipantService
+import com.bojogar.bot.service.PeladaService
 import com.bojogar.bot.service.UserService
 import com.bojogar.bot.util.PhoneUtils
 import com.bojogar.bot.whatsapp.command.BotCommand
@@ -19,7 +18,8 @@ import java.util.Locale
 @Component
 class ContaCommand(
     private val userService: UserService,
-    private val participantService: ParticipantService
+    private val participantService: ParticipantService,
+    private val peladaService: PeladaService
 ) : BotCommand {
 
     override val name = "/conta"
@@ -45,14 +45,22 @@ class ContaCommand(
         val user = userService.findByPhone(context.from)
 
         val allParticipations = participantService.getUserParticipations(context.from, activeOnly = false)
-        val active = allParticipations.count {
-            it.status in listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST) &&
-                it.pelada.status in listOf(StatusPelada.OPEN, StatusPelada.FULL) &&
-                it.pelada.dataHora.isAfter(LocalDateTime.now())
+        val peladaMap = allParticipations.map { it.peladaCodigo }.distinct()
+            .mapNotNull { code -> peladaService.findByCode(code)?.let { code to it } }
+            .toMap()
+
+        val active = allParticipations.count { p ->
+            val pelada = peladaMap[p.peladaCodigo]
+            p.status in listOf("CONFIRMED", "WAITLIST") &&
+                pelada != null &&
+                pelada.status in listOf("OPEN", "FULL") &&
+                pelada.dataHora.isAfter(LocalDateTime.now())
         }
-        val total = allParticipations.count {
-            it.status == ParticipantStatus.CONFIRMED &&
-                it.pelada.status in listOf(StatusPelada.FINISHED, StatusPelada.IN_PROGRESS)
+        val total = allParticipations.count { p ->
+            val pelada = peladaMap[p.peladaCodigo]
+            p.status == "CONFIRMED" &&
+                pelada != null &&
+                pelada.status in listOf("FINISHED", "IN_PROGRESS")
         }
 
         ws.sendMessage(
@@ -79,9 +87,16 @@ class ContaCommand(
 
     private fun showPeladas(context: CommandContext, ws: WhatsAppService) {
         val participations = participantService.getUserParticipations(context.from)
-            .filter { it.pelada.dataHora.isAfter(LocalDateTime.now()) }
+        val peladaMap = participations.map { it.peladaCodigo }.distinct()
+            .mapNotNull { code -> peladaService.findByCode(code)?.let { code to it } }
+            .toMap()
 
-        if (participations.isEmpty()) {
+        val upcoming = participations.filter { p ->
+            val pelada = peladaMap[p.peladaCodigo]
+            pelada != null && pelada.dataHora.isAfter(LocalDateTime.now())
+        }
+
+        if (upcoming.isEmpty()) {
             ws.sendMessage(context.from, "\uD83C\uDFD0 Voce nao esta inscrito em nenhuma pelada ativa.")
             ws.sendButtons(
                 to = context.from,
@@ -102,11 +117,12 @@ class ContaCommand(
             sections = listOf(
                 ListSection(
                     title = "Ativas",
-                    rows = participations.take(10).map { p ->
+                    rows = upcoming.take(10).mapNotNull { p ->
+                        val pel = peladaMap[p.peladaCodigo] ?: return@mapNotNull null
                         ListRow(
-                            id = "/minhas ver ${p.pelada.codigo}",
-                            title = "${p.pelada.esporte.label} - ${p.pelada.local.take(20)}",
-                            description = "${p.pelada.dataHora.format(DATE_FMT_SHORT)} | ${p.status.name}"
+                            id = "/minhas ver ${p.peladaCodigo}",
+                            title = "${pel.esporteLabel} - ${pel.local.take(20)}",
+                            description = "${pel.dataHora.format(DATE_FMT_SHORT)} | ${p.status}"
                         )
                     }
                 )
@@ -139,7 +155,7 @@ class ContaCommand(
         var cancelled = 0
 
         participations.forEach { p ->
-            val result = participantService.leave(context.from, p.pelada.codigo)
+            val result = participantService.leave(context.from, p.peladaCodigo)
             if (result is com.bojogar.bot.service.LeaveResult.Left) cancelled++
         }
 

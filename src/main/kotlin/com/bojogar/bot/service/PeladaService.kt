@@ -1,9 +1,13 @@
 package com.bojogar.bot.service
 
+import com.bojogar.bot.dto.request.CreatePeladaRequest
+import com.bojogar.bot.dto.request.UpdatePeladaRequest
+import com.bojogar.bot.dto.response.PeladaResponse
 import com.bojogar.bot.entity.Pelada
 import com.bojogar.bot.entity.PeladaParticipant
 import com.bojogar.bot.enums.*
 import com.bojogar.bot.exception.BusinessException
+import com.bojogar.bot.mapper.PeladaMapper
 import com.bojogar.bot.repository.PeladaParticipantRepository
 import com.bojogar.bot.repository.PeladaRepository
 import com.bojogar.bot.repository.UserRepository
@@ -12,14 +16,14 @@ import com.bojogar.bot.util.PhoneUtils
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.math.BigDecimal
 import java.time.LocalDateTime
 
 @Service
 class PeladaService(
     private val peladaRepository: PeladaRepository,
     private val userRepository: UserRepository,
-    private val participantRepository: PeladaParticipantRepository
+    private val participantRepository: PeladaParticipantRepository,
+    private val peladaMapper: PeladaMapper
 ) {
 
     companion object {
@@ -28,19 +32,14 @@ class PeladaService(
     }
 
     @Transactional
-    fun create(
-        phone: String,
-        sport: Esporte,
-        description: String?,
-        dateTime: LocalDateTime,
-        location: String,
-        maxPlayers: Int,
-        pricePerPlayer: BigDecimal,
-        pixKey: String?
-    ): Pelada {
+    fun create(phone: String, request: CreatePeladaRequest): PeladaResponse {
         val normalized = PhoneUtils.normalizePhone(phone)
         val user = userRepository.findByPhone(normalized)
             ?: throw BusinessException("Usuario nao encontrado")
+
+        val sport = runCatching { Esporte.valueOf(request.esporte.uppercase()) }.getOrElse {
+            throw BusinessException("Esporte invalido: ${request.esporte}")
+        }
 
         val code = generateUniqueCode()
 
@@ -49,12 +48,12 @@ class PeladaService(
                 codigo = code,
                 createdBy = user,
                 esporte = sport,
-                descricao = description,
-                dataHora = dateTime,
-                local = location,
-                limiteJogadores = maxPlayers,
-                valorPorJogador = pricePerPlayer,
-                chavePix = pixKey,
+                descricao = request.descricao,
+                dataHora = request.dataHora,
+                local = request.local,
+                limiteJogadores = request.limiteJogadores,
+                valorPorJogador = request.valorPorJogador,
+                chavePix = request.chavePix,
                 status = StatusPelada.OPEN
             )
         )
@@ -70,49 +69,62 @@ class PeladaService(
         )
 
         log.info("Pelada created: {} by {} ({})", code, user.name, normalized)
-        return pelada
+        return peladaMapper.toResponse(pelada)
     }
 
-    fun findByCode(code: String): Pelada? {
-        return peladaRepository.findByCodigo(code.uppercase())
+    @Transactional(readOnly = true)
+    fun findByCode(code: String): PeladaResponse? {
+        val pelada = peladaRepository.findByCodigo(code.uppercase()) ?: return null
+        return peladaMapper.toResponse(pelada)
     }
 
-    fun findOpenPeladas(): List<Pelada> {
+    @Transactional(readOnly = true)
+    fun findOpenPeladas(): List<PeladaResponse> {
         return peladaRepository.findByStatusInAndDataHoraAfter(
             listOf(StatusPelada.OPEN, StatusPelada.FULL),
             LocalDateTime.now()
-        )
+        ).map { peladaMapper.toResponse(it) }
     }
 
-    fun findByUser(phone: String): List<Pelada> {
+    @Transactional(readOnly = true)
+    fun findByUser(phone: String): List<PeladaResponse> {
         val normalized = PhoneUtils.normalizePhone(phone)
         val participations = participantRepository.findByUserPhoneAndStatusIn(
             normalized,
             listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST)
         )
-        return participations.map { it.pelada }
+        return participations.map { peladaMapper.toResponse(it.pelada) }
     }
 
-    fun findCreatedByUser(phone: String): List<Pelada> {
+    @Transactional(readOnly = true)
+    fun findCreatedByUser(phone: String): List<PeladaResponse> {
         return peladaRepository.findByCreatedByPhone(PhoneUtils.normalizePhone(phone))
+            .map { peladaMapper.toResponse(it) }
     }
 
     @Transactional
-    fun updateStatus(code: String, newStatus: StatusPelada, requesterPhone: String): Pelada {
-        val pelada = findByCode(code) ?: throw BusinessException("Pelada nao encontrada: $code")
+    fun update(code: String, requesterPhone: String, request: UpdatePeladaRequest): PeladaResponse {
+        val pelada = peladaRepository.findByCodigo(code.uppercase())
+            ?: throw BusinessException("Pelada nao encontrada: $code")
 
-        if (!pelada.status.canTransitionTo(newStatus)) {
-            throw BusinessException("Transicao invalida: ${pelada.status} -> $newStatus")
+        request.descricao?.let { pelada.descricao = it }
+        request.dataHora?.let { pelada.dataHora = it }
+        request.local?.let { pelada.local = it }
+        request.limiteJogadores?.let {
+            if (it < 2) throw BusinessException("Minimo 2 jogadores")
+            pelada.limiteJogadores = it
         }
+        request.valorPorJogador?.let { pelada.valorPorJogador = it }
+        request.chavePix?.let { pelada.chavePix = it }
 
-        pelada.status = newStatus
-        log.info("Pelada {} status: {} -> {}", code, pelada.status, newStatus)
-        return peladaRepository.save(pelada)
+        log.info("Pelada {} updated by {}", code, requesterPhone)
+        return peladaMapper.toResponse(peladaRepository.save(pelada))
     }
 
     @Transactional
-    fun cancel(code: String, requesterPhone: String): Pelada {
-        val pelada = findByCode(code) ?: throw BusinessException("Pelada nao encontrada: $code")
+    fun cancel(code: String, requesterPhone: String): PeladaResponse {
+        val pelada = peladaRepository.findByCodigo(code.uppercase())
+            ?: throw BusinessException("Pelada nao encontrada: $code")
 
         if (!pelada.status.canTransitionTo(StatusPelada.CANCELLED)) {
             throw BusinessException("Pelada nao pode ser cancelada no status ${pelada.status}")
@@ -128,16 +140,7 @@ class PeladaService(
 
         pelada.status = StatusPelada.CANCELLED
         log.info("Pelada {} cancelled by {}, {} participants affected", code, requesterPhone, participants.size)
-        return peladaRepository.save(pelada)
-    }
-
-    fun getConfirmedCount(pelada: Pelada): Long {
-        return participantRepository.countByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.CONFIRMED)
-    }
-
-    fun getRemainingSlots(pelada: Pelada): Int {
-        val confirmed = getConfirmedCount(pelada)
-        return (pelada.limiteJogadores - confirmed).toInt().coerceAtLeast(0)
+        return peladaMapper.toResponse(peladaRepository.save(pelada))
     }
 
     private fun generateUniqueCode(): String {

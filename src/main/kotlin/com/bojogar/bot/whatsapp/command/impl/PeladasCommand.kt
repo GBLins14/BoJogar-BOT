@@ -1,6 +1,6 @@
 package com.bojogar.bot.whatsapp.command.impl
 
-import com.bojogar.bot.entity.Pelada
+import com.bojogar.bot.dto.response.PeladaResponse
 import com.bojogar.bot.service.AuthorizationService
 import com.bojogar.bot.service.JoinResult
 import com.bojogar.bot.service.ParticipantService
@@ -14,7 +14,6 @@ import com.bojogar.bot.whatsapp.service.WhatsAppService
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.WeekFields
 import java.util.Locale
@@ -29,7 +28,6 @@ class PeladasCommand(
     override val name = "/peladas"
 
     companion object {
-        private val DATE_FMT = DateTimeFormatter.ofPattern("dd/MM HH:mm")
         private val DATE_FMT_SHORT = DateTimeFormatter.ofPattern("EEE dd/MM - HH'h'", Locale("pt", "BR"))
     }
 
@@ -86,11 +84,10 @@ class PeladasCommand(
                 ListSection(
                     title = "Hoje",
                     rows = peladas.take(10).map { p ->
-                        val remaining = peladaService.getRemainingSlots(p)
                         ListRow(
                             id = "/peladas ver ${p.codigo}",
-                            title = "${p.esporte.label} - ${p.local.take(20)}",
-                            description = "${p.dataHora.format(DATE_FMT_SHORT)} | ${formatPrice(p)} | $remaining vagas"
+                            title = "${p.esporteLabel} - ${p.local.take(20)}",
+                            description = "${p.dataHora.format(DATE_FMT_SHORT)} | ${formatPrice(p)} | ${p.remainingSlots} vagas"
                         )
                     }
                 )
@@ -135,11 +132,10 @@ class PeladasCommand(
             ListSection(
                 title = label,
                 rows = list.take(10).map { p ->
-                    val remaining = peladaService.getRemainingSlots(p)
                     ListRow(
                         id = "/peladas ver ${p.codigo}",
-                        title = "${p.esporte.label} - ${p.local.take(20)}",
-                        description = "${p.dataHora.format(DATE_FMT_SHORT)} | ${formatPrice(p)} | $remaining vagas"
+                        title = "${p.esporteLabel} - ${p.local.take(20)}",
+                        description = "${p.dataHora.format(DATE_FMT_SHORT)} | ${formatPrice(p)} | ${p.remainingSlots} vagas"
                     )
                 }
             )
@@ -171,18 +167,15 @@ class PeladasCommand(
         showDetalhesForPelada(context, ws, pelada)
     }
 
-    private fun showDetalhesForPelada(context: CommandContext, ws: WhatsAppService, pelada: Pelada) {
-        val remaining = peladaService.getRemainingSlots(pelada)
-        val confirmed = peladaService.getConfirmedCount(pelada)
-
+    private fun showDetalhesForPelada(context: CommandContext, ws: WhatsAppService, pelada: PeladaResponse) {
         ws.sendMessage(
             context.from,
             buildString {
-                append("\uD83C\uDFD0 *${pelada.esporte.label} — ${pelada.codigo}*\n\n")
+                append("\uD83C\uDFD0 *${pelada.esporteLabel} — ${pelada.codigo}*\n\n")
                 if (!pelada.descricao.isNullOrBlank()) append("\uD83D\uDCDD ${pelada.descricao}\n")
                 append("\uD83D\uDCCD *Local:* ${pelada.local}\n")
                 append("\uD83D\uDCC5 *Data:* ${pelada.dataHora.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))}\n")
-                append("\uD83D\uDC65 *Vagas:* $confirmed/${pelada.limiteJogadores} ($remaining restantes)\n")
+                append("\uD83D\uDC65 *Vagas:* ${pelada.confirmedCount}/${pelada.limiteJogadores} (${pelada.remainingSlots} restantes)\n")
                 append("\uD83D\uDCB0 *Valor:* ${formatPrice(pelada)}\n")
                 if (pelada.valorPorJogador > BigDecimal.ZERO && !pelada.chavePix.isNullOrBlank()) {
                     append("\uD83D\uDCF2 *Pix:* ${pelada.chavePix}\n")
@@ -219,12 +212,12 @@ class PeladasCommand(
 
         when (val result = participantService.join(context.from, codigo)) {
             is JoinResult.Confirmed -> {
-                val pelada = peladaService.findByCode(codigo)!!
+                val pelada = result.pelada
                 ws.sendMessage(
                     context.from,
                     buildString {
                         append("\u2705 *Inscricao Confirmada!*\n\n")
-                        append("Pelada *${pelada.codigo}* — ${pelada.esporte.label}\n")
+                        append("Pelada *${pelada.codigo}* — ${pelada.esporteLabel}\n")
                         append("\uD83D\uDCCD ${pelada.local}\n")
                         append("\uD83D\uDCC5 ${pelada.dataHora.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))}\n")
                         if (pelada.valorPorJogador > BigDecimal.ZERO) {
@@ -262,7 +255,7 @@ class PeladasCommand(
         }
     }
 
-    private fun formatPrice(pelada: Pelada): String {
+    private fun formatPrice(pelada: PeladaResponse): String {
         return if (pelada.valorPorJogador > BigDecimal.ZERO) "R$ ${pelada.valorPorJogador}" else "Gratis"
     }
 }

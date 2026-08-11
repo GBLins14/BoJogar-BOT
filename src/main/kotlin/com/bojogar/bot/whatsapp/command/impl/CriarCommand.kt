@@ -1,5 +1,6 @@
 package com.bojogar.bot.whatsapp.command.impl
 
+import com.bojogar.bot.dto.request.CreatePeladaRequest
 import com.bojogar.bot.enums.Esporte
 import com.bojogar.bot.service.PeladaService
 import com.bojogar.bot.whatsapp.command.BotCommand
@@ -216,13 +217,15 @@ class CriarCommand(
 
             val pelada = peladaService.create(
                 phone = context.from,
-                sport = esporte,
-                description = fields["descricao"],
-                dateTime = dateTime,
-                location = fields["local"] ?: throw IllegalArgumentException("Local obrigatorio"),
-                maxPlayers = maxPlayers,
-                pricePerPlayer = price,
-                pixKey = fields["pixKey"]
+                request = CreatePeladaRequest(
+                    esporte = esporte.name,
+                    descricao = fields["descricao"],
+                    dataHora = dateTime,
+                    local = fields["local"] ?: throw IllegalArgumentException("Local obrigatorio"),
+                    limiteJogadores = maxPlayers,
+                    valorPorJogador = price,
+                    chavePix = fields["pixKey"]
+                )
             )
 
             sessionManager.clear(context.from)

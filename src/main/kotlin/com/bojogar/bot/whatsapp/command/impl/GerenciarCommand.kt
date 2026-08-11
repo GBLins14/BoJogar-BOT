@@ -1,8 +1,6 @@
 package com.bojogar.bot.whatsapp.command.impl
 
-import com.bojogar.bot.enums.ParticipantRole
-import com.bojogar.bot.enums.ParticipantStatus
-import com.bojogar.bot.enums.StatusPagamento
+import com.bojogar.bot.dto.request.UpdatePeladaRequest
 import com.bojogar.bot.service.*
 import com.bojogar.bot.util.PhoneUtils
 import com.bojogar.bot.whatsapp.command.BotCommand
@@ -72,7 +70,7 @@ class GerenciarCommand(
         }
 
         if (managed.size == 1) {
-            showPeladaAdminFor(context, ws, managed.first().pelada.codigo)
+            showPeladaAdminFor(context, ws, managed.first().peladaCodigo)
             return
         }
 
@@ -84,12 +82,15 @@ class GerenciarCommand(
             sections = listOf(
                 ListSection(
                     title = "Peladas que voce gerencia",
-                    rows = managed.take(10).map { p ->
-                        ListRow(
-                            id = "/gerenciar pelada ${p.pelada.codigo}",
-                            title = "${p.pelada.esporte.label} - ${p.pelada.codigo}",
-                            description = "${p.pelada.local.take(30)} | ${p.role.name}"
-                        )
+                    rows = managed.take(10).mapNotNull { p ->
+                        val pel = peladaService.findByCode(p.peladaCodigo)
+                        if (pel != null) {
+                            ListRow(
+                                id = "/gerenciar pelada ${p.peladaCodigo}",
+                                title = "${pel.esporteLabel} - ${p.peladaCodigo}",
+                                description = "${pel.local.take(30)} | ${p.role}"
+                            )
+                        } else null
                     }
                 )
             ),
@@ -110,18 +111,16 @@ class GerenciarCommand(
 
     private fun showPeladaAdminFor(context: CommandContext, ws: WhatsAppService, code: String) {
         val pelada = peladaService.findByCode(code) ?: return
-        val confirmed = peladaService.getConfirmedCount(pelada)
-        val remaining = peladaService.getRemainingSlots(pelada)
 
         ws.sendMessage(
             context.from,
             buildString {
                 append("\uD83D\uDD27 *Admin — ${pelada.codigo}*\n\n")
-                append("\uD83C\uDFC6 ${pelada.esporte.label}\n")
+                append("\uD83C\uDFC6 ${pelada.esporteLabel}\n")
                 append("\uD83D\uDCCD ${pelada.local}\n")
                 append("\uD83D\uDCC5 ${pelada.dataHora.format(DATE_FMT)}\n")
-                append("\uD83D\uDC65 $confirmed/${pelada.limiteJogadores} ($remaining vagas)\n")
-                append("\uD83D\uDCCA Status: ${pelada.status.name}")
+                append("\uD83D\uDC65 ${pelada.confirmedCount}/${pelada.limiteJogadores} (${pelada.remainingSlots} vagas)\n")
+                append("\uD83D\uDCCA Status: ${pelada.status}")
             }
         )
 
@@ -151,8 +150,8 @@ class GerenciarCommand(
             return
         }
 
-        val confirmed = participants.filter { it.status == ParticipantStatus.CONFIRMED }
-        val waitlisted = participants.filter { it.status == ParticipantStatus.WAITLIST }
+        val confirmed = participants.filter { it.status == "CONFIRMED" }
+        val waitlisted = participants.filter { it.status == "WAITLIST" }
 
         val sections = mutableListOf<ListSection>()
 
@@ -161,11 +160,11 @@ class GerenciarCommand(
                 ListSection(
                     title = "Confirmados (${confirmed.size})",
                     rows = confirmed.take(10).map { p ->
-                        val roleLabel = if (p.role != ParticipantRole.PLAYER) " [${p.role.name}]" else ""
+                        val roleLabel = if (p.role != "PLAYER") " [${p.role}]" else ""
                         ListRow(
-                            id = "/gerenciar remover $code ${p.user.phone}",
-                            title = "${p.displayName ?: p.user.name}$roleLabel",
-                            description = PhoneUtils.formatPhoneDisplay(p.user.phone)
+                            id = "/gerenciar remover $code ${p.userPhone}",
+                            title = "${p.displayName ?: p.userName}$roleLabel",
+                            description = PhoneUtils.formatPhoneDisplay(p.userPhone)
                         )
                     }
                 )
@@ -178,9 +177,9 @@ class GerenciarCommand(
                     title = "Lista de Espera (${waitlisted.size})",
                     rows = waitlisted.take(10).map { p ->
                         ListRow(
-                            id = "/gerenciar remover $code ${p.user.phone}",
-                            title = "#${p.waitlistPosition} ${p.displayName ?: p.user.name}",
-                            description = PhoneUtils.formatPhoneDisplay(p.user.phone)
+                            id = "/gerenciar remover $code ${p.userPhone}",
+                            title = "#${p.waitlistPosition} ${p.displayName ?: p.userName}",
+                            description = PhoneUtils.formatPhoneDisplay(p.userPhone)
                         )
                     }
                 )
@@ -207,7 +206,7 @@ class GerenciarCommand(
         }
 
         val participants = participantService.getParticipants(code)
-        val target = participants.find { it.user.phone == phone }
+        val target = participants.find { it.userPhone == phone }
 
         if (target == null) {
             ws.sendMessage(context.from, "\u26A0\uFE0F Participante nao encontrado.")
@@ -217,7 +216,7 @@ class GerenciarCommand(
         ws.sendButtons(
             to = context.from,
             header = "Remover Participante",
-            body = "\u26A0\uFE0F Remover *${target.displayName ?: target.user.name}* da pelada *$code*?",
+            body = "\u26A0\uFE0F Remover *${target.displayName ?: target.userName}* da pelada *$code*?",
             buttons = listOf(
                 Button(id = "/gerenciar remover_sim $code $phone", title = "Sim, Remover"),
                 Button(id = "/gerenciar participantes $code", title = "Voltar")
@@ -234,7 +233,7 @@ class GerenciarCommand(
                 ws.sendMessage(context.from, "\u2705 Participante removido com sucesso.")
 
                 val pelada = peladaService.findByCode(code)
-                val removedParticipant = participantService.getParticipants(code).find { it.user.phone == phone }
+                val removedParticipant = participantService.getParticipants(code).find { it.userPhone == phone }
                 if (pelada != null && removedParticipant != null) {
                     notificationService.notifyParticipantRemoved(removedParticipant, pelada)
                 }
@@ -246,7 +245,7 @@ class GerenciarCommand(
                     }
                     ws.sendMessage(
                         context.from,
-                        "\uD83D\uDD04 ${result.promoted.displayName ?: result.promoted.user.name} promovido da lista de espera."
+                        "\uD83D\uDD04 ${result.promoted.displayName ?: result.promoted.userName} promovido da lista de espera."
                     )
                 }
             }
@@ -275,7 +274,7 @@ class GerenciarCommand(
         }
 
         val participants = participantService.getParticipants(code)
-        val target = participants.find { it.user.phone == phone }
+        val target = participants.find { it.userPhone == phone }
 
         if (target == null) {
             ws.sendMessage(context.from, "\u26A0\uFE0F Participante nao encontrado.")
@@ -283,10 +282,10 @@ class GerenciarCommand(
         }
 
         try {
-            pagamentoService.confirmPayment(target.id!!, context.from)
+            pagamentoService.confirmPayment(target.id, context.from)
             ws.sendMessage(
                 context.from,
-                "\u2705 Pagamento de *${target.displayName ?: target.user.name}* confirmado!"
+                "\u2705 Pagamento de *${target.displayName ?: target.userName}* confirmado!"
             )
         } catch (e: Exception) {
             ws.sendMessage(context.from, "\u274C ${e.message}")
@@ -321,10 +320,10 @@ class GerenciarCommand(
             return
         }
 
-        val payments = pagamentoService.getPaymentStatus(code)
-        val paid = payments.count { it.status == StatusPagamento.CONFIRMADO }
-        val pending = payments.count { it.status == StatusPagamento.PENDENTE }
-        val totalCollected = payments.filter { it.status == StatusPagamento.CONFIRMADO }.sumOf { it.amount }
+        val payments = pagamentoService.getPaymentsByPelada(code)
+        val paid = payments.count { it.status == "CONFIRMADO" }
+        val pending = payments.count { it.status == "PENDENTE" }
+        val totalCollected = payments.filter { it.status == "CONFIRMADO" }.sumOf { it.valor }
 
         ws.sendMessage(
             context.from,
@@ -336,8 +335,8 @@ class GerenciarCommand(
 
                 if (payments.isNotEmpty()) {
                     payments.forEach { p ->
-                        val icon = if (p.status == StatusPagamento.CONFIRMADO) "\u2705" else "\u23F3"
-                        append("$icon ${p.participantName} — R$ ${p.amount}\n")
+                        val icon = if (p.status == "CONFIRMADO") "\u2705" else "\u23F3"
+                        append("$icon ${p.participantName} — R$ ${p.valor}\n")
                     }
                 }
             }
@@ -355,8 +354,8 @@ class GerenciarCommand(
                         title = "Pagamento Pendente",
                         rows = unpaid.take(10).map { p ->
                             ListRow(
-                                id = "/gerenciar confirmar_pgto $code ${p.user.phone}",
-                                title = p.displayName ?: p.user.name,
+                                id = "/gerenciar confirmar_pgto $code ${p.userPhone}",
+                                title = p.displayName ?: p.userName,
                                 description = "R$ ${pelada.valorPorJogador} | Pendente"
                             )
                         }
@@ -417,8 +416,6 @@ class GerenciarCommand(
             return
         }
 
-        val pelada = peladaService.findByCode(code) ?: return
-
         if (value.isBlank()) {
             sessionManager.setCurrentPelada(context.from, code, ConversationState.EDITING_PELADA)
             sessionManager.updateSession(context.from, "field", field, field)
@@ -435,23 +432,23 @@ class GerenciarCommand(
         }
 
         try {
-            when (field) {
-                "local" -> pelada.local = value
+            val request = when (field) {
+                "local" -> UpdatePeladaRequest(local = value)
                 "limite" -> {
                     val limite = value.toIntOrNull() ?: throw IllegalArgumentException("Numero invalido")
                     if (limite < 2) throw IllegalArgumentException("Minimo 2 jogadores")
-                    pelada.limiteJogadores = limite
+                    UpdatePeladaRequest(limiteJogadores = limite)
                 }
                 "valor" -> {
                     val valor = value.replace(",", ".").toBigDecimalOrNull()
                         ?: throw IllegalArgumentException("Valor invalido")
-                    pelada.valorPorJogador = valor
+                    UpdatePeladaRequest(valorPorJogador = valor)
                 }
-                "descricao" -> pelada.descricao = value
+                "descricao" -> UpdatePeladaRequest(descricao = value)
                 else -> throw IllegalArgumentException("Campo desconhecido: $field")
             }
 
-            peladaService.updateStatus(code, pelada.status, context.from) // just saves
+            peladaService.update(code, context.from, request)
             sessionManager.clear(context.from)
             ws.sendMessage(context.from, "\u2705 Campo *$field* atualizado!")
 

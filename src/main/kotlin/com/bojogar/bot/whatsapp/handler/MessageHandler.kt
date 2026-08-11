@@ -10,7 +10,10 @@ import com.bojogar.bot.whatsapp.session.ConversationState
 import com.bojogar.bot.whatsapp.session.SessionManager
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 
 @Component
 class MessageHandler(
@@ -23,12 +26,13 @@ class MessageHandler(
     companion object {
         private val log = LoggerFactory.getLogger(MessageHandler::class.java)
         private val PELADA_CODE_PATTERN = Regex("^[A-Za-z0-9]{6}$")
+        private const val DEDUP_TTL_SECONDS = 300L
     }
+
+    private val processedMessages = ConcurrentHashMap<String, Instant>()
 
     @Async
     fun handle(payload: WebhookPayload) {
-        log.info("Processing webhook — {} entries", payload.entry.size)
-
         val contacts = payload.entry
             .flatMap { it.changes }
             .filter { it.field == "messages" }
@@ -40,11 +44,26 @@ class MessageHandler(
                 .filter { it.field == "messages" }
                 .forEach { change ->
                     change.value.messages?.forEach { message ->
+                        if (isDuplicate(message.id)) {
+                            log.debug("Skipping duplicate message {}", message.id)
+                            return@forEach
+                        }
                         val senderName = contacts[message.from]?.profile?.name ?: ""
                         processMessage(message, senderName)
                     }
                 }
         }
+    }
+
+    private fun isDuplicate(messageId: String): Boolean {
+        val previous = processedMessages.putIfAbsent(messageId, Instant.now())
+        return previous != null
+    }
+
+    @Scheduled(fixedRate = 300_000)
+    fun cleanupProcessedMessages() {
+        val cutoff = Instant.now().minusSeconds(DEDUP_TTL_SECONDS)
+        processedMessages.entries.removeIf { it.value.isBefore(cutoff) }
     }
 
     private fun processMessage(message: IncomingMessage, senderName: String) {
@@ -75,7 +94,7 @@ class MessageHandler(
         }
 
         if (rawMessage.isNullOrBlank()) {
-            log.warn("Empty message from {}, ignoring", message.from)
+            log.debug("Unsupported message type [{}] from {}, ignoring", message.type, message.from)
             return
         }
 
