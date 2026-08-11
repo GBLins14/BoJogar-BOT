@@ -77,7 +77,7 @@ class ParticipantService(
 
         return synchronized(peladaCode.uppercase().intern()) {
             val confirmedCount = participantRepository.countByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.CONFIRMED)
-            val hasSlot = confirmedCount < pelada.limiteJogadores
+            val hasSlot = pelada.limiteJogadores == 0 || confirmedCount < pelada.limiteJogadores
 
             if (hasSlot) {
                 val participant = participantRepository.save(
@@ -92,7 +92,7 @@ class ParticipantService(
 
                 createPaymentIfNeeded(participant, pelada)
 
-                if (confirmedCount + 1 >= pelada.limiteJogadores && pelada.status == StatusPelada.OPEN) {
+                if (pelada.limiteJogadores > 0 && confirmedCount + 1 >= pelada.limiteJogadores && pelada.status == StatusPelada.OPEN) {
                     pelada.status = StatusPelada.FULL
                     peladaRepository.save(pelada)
                     log.info("Pelada {} is now FULL", peladaCode)
@@ -270,7 +270,7 @@ class ParticipantService(
     private fun updatePeladaStatusAfterLeave(pelada: com.bojogar.bot.entity.Pelada) {
         if (pelada.status == StatusPelada.FULL) {
             val confirmed = participantRepository.countByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.CONFIRMED)
-            if (confirmed < pelada.limiteJogadores) {
+            if (pelada.limiteJogadores == 0 || confirmed < pelada.limiteJogadores) {
                 pelada.status = StatusPelada.OPEN
                 peladaRepository.save(pelada)
                 log.info("Pelada {} back to OPEN ({}/{})", pelada.codigo, confirmed, pelada.limiteJogadores)

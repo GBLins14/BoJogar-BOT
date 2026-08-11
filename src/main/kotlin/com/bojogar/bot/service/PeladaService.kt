@@ -103,7 +103,7 @@ class PeladaService(
         request.dataHora?.let { pelada.dataHora = it }
         request.local?.let { pelada.local = it }
         request.limiteJogadores?.let {
-            if (it < 2) throw BusinessException("Minimo 2 jogadores")
+            if (it != 0 && it < 2) throw BusinessException("Minimo 2 jogadores (ou 0 para sem limite)")
             pelada.limiteJogadores = it
         }
         request.valorPorJogador?.let { pelada.valorPorJogador = it }

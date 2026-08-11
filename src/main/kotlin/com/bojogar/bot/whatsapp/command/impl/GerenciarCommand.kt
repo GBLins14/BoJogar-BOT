@@ -124,7 +124,11 @@ class GerenciarCommand(
                 append("\uD83C\uDFC6 ${pelada.esporteLabel}\n")
                 append("\uD83D\uDCCD ${pelada.local}\n")
                 append("\uD83D\uDCC5 ${pelada.dataHora.format(DATE_FMT)}\n")
-                append("\uD83D\uDC65 ${pelada.confirmedCount}/${pelada.limiteJogadores} (${pelada.remainingSlots} vagas)\n")
+                if (pelada.limiteJogadores == 0) {
+                    append("\uD83D\uDC65 ${pelada.confirmedCount} confirmados (Sem limite)\n")
+                } else {
+                    append("\uD83D\uDC65 ${pelada.confirmedCount}/${pelada.limiteJogadores} (${pelada.remainingSlots} vagas)\n")
+                }
                 append("\uD83D\uDCCA Status: ${pelada.status}")
             }
         )
@@ -319,7 +323,8 @@ class GerenciarCommand(
                 "\u2705 Pagamento de *${target.displayName ?: target.userName}* confirmado!"
             )
         } catch (e: Exception) {
-            ws.sendMessage(context.from, "\u274C ${e.message}")
+            log.error("Error confirming payment in pelada {}: {}", code, e.message, e)
+            ws.sendMessage(context.from, "\u274C Ocorreu um erro. Tente novamente mais tarde.")
         }
 
         ws.sendButtons(
@@ -420,7 +425,8 @@ class GerenciarCommand(
                 append("Campos editaveis:\n")
                 append("1. Local: ${pelada.local}\n")
                 append("2. Data: ${pelada.dataHora.format(DATE_FMT)}\n")
-                append("3. Limite: ${pelada.limiteJogadores} jogadores\n")
+                val limiteDisplay = if (pelada.limiteJogadores == 0) "Sem limite" else "${pelada.limiteJogadores} jogadores"
+                append("3. Limite: $limiteDisplay\n")
                 append("4. Valor: R$ ${pelada.valorPorJogador}\n")
                 append("5. Descricao: ${pelada.descricao ?: "-"}\n")
             }
@@ -436,7 +442,7 @@ class GerenciarCommand(
                     rows = listOf(
                         ListRow(id = "/gerenciar editar_campo $code local", title = "Local", description = pelada.local.take(30)),
                         ListRow(id = "/gerenciar editar_campo $code dataHora", title = "Data/Hora", description = pelada.dataHora.format(DATE_FMT)),
-                        ListRow(id = "/gerenciar editar_campo $code limite", title = "Limite de Jogadores", description = "${pelada.limiteJogadores} jogadores"),
+                        ListRow(id = "/gerenciar editar_campo $code limite", title = "Limite de Jogadores", description = if (pelada.limiteJogadores == 0) "Sem limite" else "${pelada.limiteJogadores} jogadores"),
                         ListRow(id = "/gerenciar editar_campo $code valor", title = "Valor por Jogador", description = "R$ ${pelada.valorPorJogador}"),
                         ListRow(id = "/gerenciar editar_campo $code descricao", title = "Descricao", description = (pelada.descricao ?: "-").take(30)),
                         ListRow(id = "/gerenciar editar_campo $code chavePix", title = "Chave Pix", description = (pelada.chavePix ?: "-").take(30))
@@ -463,7 +469,7 @@ class GerenciarCommand(
 
             val label = when (field) {
                 "local" -> "novo local"
-                "limite" -> "novo limite de jogadores"
+                "limite" -> "novo limite de jogadores (ou 0 para sem limite)"
                 "valor" -> "novo valor por jogador"
                 "descricao" -> "nova descricao"
                 "dataHora" -> "nova data e horario (DD/MM HH:MM)"
@@ -479,12 +485,15 @@ class GerenciarCommand(
                 "local" -> UpdatePeladaRequest(local = value)
                 "limite" -> {
                     val limite = value.toIntOrNull() ?: throw IllegalArgumentException("Numero invalido")
-                    if (limite < 2) throw IllegalArgumentException("Minimo 2 jogadores")
+                    if (limite != 0 && limite < 2) throw IllegalArgumentException("Minimo 2 jogadores (ou 0 para sem limite)")
                     UpdatePeladaRequest(limiteJogadores = limite)
                 }
                 "valor" -> {
                     val valor = value.replace(",", ".").toBigDecimalOrNull()
                         ?: throw IllegalArgumentException("Valor invalido")
+                    if (valor > java.math.BigDecimal.ZERO && valor < java.math.BigDecimal(5)) {
+                        throw IllegalArgumentException("Valor minimo para pelada paga e R$ 5,00")
+                    }
                     UpdatePeladaRequest(valorPorJogador = valor)
                 }
                 "descricao" -> UpdatePeladaRequest(descricao = value)
@@ -508,8 +517,11 @@ class GerenciarCommand(
                 code,
                 "\uD83D\uDD14 A pelada *$code* foi atualizada. Confira os novos detalhes!"
             )
+        } catch (e: IllegalArgumentException) {
+            ws.sendMessage(context.from, "\u26A0\uFE0F ${e.message}")
         } catch (e: Exception) {
-            ws.sendMessage(context.from, "\u274C ${e.message}")
+            log.error("Error editing pelada {}: {}", code, e.message, e)
+            ws.sendMessage(context.from, "\u274C Ocorreu um erro. Tente novamente mais tarde.")
         }
 
         ws.sendButtons(
@@ -566,7 +578,8 @@ class GerenciarCommand(
                 "\u274C *Pelada Cancelada*\n\nA pelada *$code* foi cancelada. ${participants.size} participante(s) notificado(s)."
             )
         } catch (e: Exception) {
-            ws.sendMessage(context.from, "\u274C Erro: ${e.message}")
+            log.error("Error cancelling pelada {}: {}", code, e.message, e)
+            ws.sendMessage(context.from, "\u274C Ocorreu um erro. Tente novamente mais tarde.")
         }
 
         ws.sendButtons(

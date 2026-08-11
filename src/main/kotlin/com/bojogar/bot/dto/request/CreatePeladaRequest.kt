@@ -19,7 +19,7 @@ data class CreatePeladaRequest(
     @field:NotBlank
     val local: String,
 
-    @field:Min(2)
+    @field:Min(0)
     val limiteJogadores: Int,
 
     @field:PositiveOrZero

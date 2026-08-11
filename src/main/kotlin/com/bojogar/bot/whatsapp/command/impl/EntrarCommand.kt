@@ -68,7 +68,11 @@ class EntrarCommand(
                 if (!pelada.descricao.isNullOrBlank()) append("\uD83D\uDCDD ${pelada.descricao}\n")
                 append("\uD83D\uDCCD *Local:* ${pelada.local}\n")
                 append("\uD83D\uDCC5 *Data:* ${pelada.dataHora.format(DATE_FMT)}\n")
-                append("\uD83D\uDC65 *Vagas:* ${pelada.remainingSlots}/${pelada.limiteJogadores} restantes\n")
+                if (pelada.limiteJogadores == 0) {
+                    append("\uD83D\uDC65 *Vagas:* Sem limite\n")
+                } else {
+                    append("\uD83D\uDC65 *Vagas:* ${pelada.remainingSlots}/${pelada.limiteJogadores} restantes\n")
+                }
                 if (pelada.valorPorJogador > java.math.BigDecimal.ZERO) {
                     append("\uD83D\uDCB0 *Valor:* R$ ${pelada.valorPorJogador}\n")
                     if (!pelada.chavePix.isNullOrBlank()) {

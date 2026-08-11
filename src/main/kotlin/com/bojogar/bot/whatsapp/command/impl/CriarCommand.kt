@@ -6,6 +6,8 @@ import com.bojogar.bot.service.PeladaService
 import com.bojogar.bot.whatsapp.command.BotCommand
 import com.bojogar.bot.whatsapp.command.CommandContext
 import com.bojogar.bot.whatsapp.model.Button
+import com.bojogar.bot.whatsapp.model.ListRow
+import com.bojogar.bot.whatsapp.model.ListSection
 import com.bojogar.bot.whatsapp.service.WhatsAppService
 import com.bojogar.bot.whatsapp.session.SessionManager
 import org.slf4j.LoggerFactory
@@ -110,19 +112,31 @@ class CriarCommand(
                     return
                 }
                 sessionManager.updateSession(context.from, "dataHora", dateTime.toString(), "maxPlayers")
-                ws.sendButtons(
+                ws.sendList(
                     to = context.from,
                     body = "\uD83D\uDC65 *Quantos jogadores?*",
-                    buttons = listOf(
-                        Button(id = "/criar jogadores 4", title = "4 jogadores"),
-                        Button(id = "/criar jogadores 8", title = "8 jogadores"),
-                        Button(id = "/criar jogadores 12", title = "12 jogadores")
+                    buttonLabel = "Escolher",
+                    sections = listOf(
+                        ListSection(
+                            title = "Quantidade",
+                            rows = listOf(
+                                ListRow(id = "/criar jogadores 4", title = "4 jogadores"),
+                                ListRow(id = "/criar jogadores 6", title = "6 jogadores"),
+                                ListRow(id = "/criar jogadores 8", title = "8 jogadores"),
+                                ListRow(id = "/criar jogadores 10", title = "10 jogadores"),
+                                ListRow(id = "/criar jogadores 12", title = "12 jogadores"),
+                                ListRow(id = "/criar jogadores 16", title = "16 jogadores"),
+                                ListRow(id = "/criar jogadores 20", title = "20 jogadores"),
+                                ListRow(id = "/criar jogadores 0", title = "Sem limite", description = "Sem restricao de vagas"),
+                                ListRow(id = "/criar jogadores custom", title = "Personalizado", description = "Digitar quantidade")
+                            )
+                        )
                     )
                 )
             }
             "maxPlayers" -> {
                 val max = value.toIntOrNull()
-                if (max == null || max < 2) {
+                if (max == null || (max != 0 && max < 2)) {
                     ws.sendMessage(context.from, "\u26A0\uFE0F Numero invalido. Minimo 2 jogadores.")
                     return
                 }
@@ -136,6 +150,10 @@ class CriarCommand(
                 val price = value.replace(",", ".").toBigDecimalOrNull()
                 if (price == null || price < BigDecimal.ZERO) {
                     ws.sendMessage(context.from, "\u26A0\uFE0F Valor invalido. Digite um numero (ex: 25 ou 0)")
+                    return
+                }
+                if (price > BigDecimal.ZERO && price < BigDecimal(5)) {
+                    ws.sendMessage(context.from, "\u26A0\uFE0F Valor minimo para pelada paga e R$ 5,00. Digite 0 para gratis ou um valor a partir de 5.")
                     return
                 }
                 sessionManager.updateSession(context.from, "price", price.toString(), null)
@@ -167,14 +185,22 @@ class CriarCommand(
     }
 
     private fun handlePlayersSelected(context: CommandContext, ws: WhatsAppService) {
-        val max = context.args.getOrNull(1)
-        if (max != null) {
-            sessionManager.updateSession(context.from, "maxPlayers", max, "price")
+        val max = context.args.getOrNull(1) ?: return
+
+        if (max == "custom") {
+            sessionManager.updateSession(context.from, "maxPlayers", "", "maxPlayers")
             ws.sendMessage(
                 context.from,
-                "\uD83D\uDCB0 *Valor por jogador:*\n\nDigite o valor (ex: 25) ou 0 para gratis"
+                "\uD83D\uDC65 *Quantidade personalizada:*\n\nDigite o numero de jogadores (minimo 2):"
             )
+            return
         }
+
+        sessionManager.updateSession(context.from, "maxPlayers", max, "price")
+        ws.sendMessage(
+            context.from,
+            "\uD83D\uDCB0 *Valor por jogador:*\n\nDigite o valor (ex: 25) ou 0 para gratis"
+        )
     }
 
     private fun showSummary(context: CommandContext, ws: WhatsAppService) {
@@ -192,7 +218,8 @@ class CriarCommand(
                 append("\uD83D\uDCDD *Descricao:* ${fields["descricao"] ?: "-"}\n")
                 append("\uD83D\uDCCD *Local:* ${fields["local"]}\n")
                 append("\uD83D\uDCC5 *Data:* ${dateTime?.format(DATE_FORMATTER_FULL) ?: fields["dataHora"]}\n")
-                append("\uD83D\uDC65 *Jogadores:* ${fields["maxPlayers"]}\n")
+                val maxPlayersDisplay = if (fields["maxPlayers"] == "0") "Sem limite" else fields["maxPlayers"]
+                append("\uD83D\uDC65 *Jogadores:* $maxPlayersDisplay\n")
                 append("\uD83D\uDCB0 *Valor:* R$ ${fields["price"]}\n")
                 if (!fields["pixKey"].isNullOrBlank()) {
                     append("\uD83D\uDCF2 *Pix:* ${fields["pixKey"]}\n")
@@ -267,10 +294,10 @@ class CriarCommand(
         } catch (e: Exception) {
             log.error("Error creating pelada for {}: {}", context.from, e.message, e)
             sessionManager.clear(context.from)
-            ws.sendMessage(context.from, "\u274C Erro ao criar pelada: ${e.message}")
+            ws.sendMessage(context.from, "\u274C Ocorreu um erro ao criar a pelada. Tente novamente mais tarde.")
             ws.sendButtons(
                 to = context.from,
-                body = "Tente novamente:",
+                body = "O que deseja fazer?",
                 buttons = listOf(
                     Button(id = "/criar", title = "Tentar Novamente"),
                     Button(id = "/start", title = "Menu Inicial")

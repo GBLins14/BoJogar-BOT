@@ -14,7 +14,7 @@ class PeladaMapper(
     fun toResponse(entity: Pelada): PeladaResponse {
         val confirmed = participantRepository.countByPeladaIdAndStatus(entity.id!!, ParticipantStatus.CONFIRMED)
         val waitlist = participantRepository.countByPeladaIdAndStatus(entity.id!!, ParticipantStatus.WAITLIST)
-        val remaining = (entity.limiteJogadores - confirmed).toInt().coerceAtLeast(0)
+        val remaining = if (entity.limiteJogadores == 0) Int.MAX_VALUE else (entity.limiteJogadores - confirmed).toInt().coerceAtLeast(0)
 
         return PeladaResponse(
             id = entity.id!!,
