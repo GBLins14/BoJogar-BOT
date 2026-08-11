@@ -21,5 +21,11 @@ class Pagamento(
 
     var transactionId: String? = null,
 
-    var paidAt: Instant? = null
+    var paidAt: Instant? = null,
+
+    @Column(unique = true)
+    var syncpayIdentifier: String? = null,
+
+    @Column(length = 1000)
+    var pixCode: String? = null
 ) : BaseEntity()

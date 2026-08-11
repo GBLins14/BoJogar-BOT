@@ -15,6 +15,7 @@ class PaymentMapper {
         valor = entity.valor,
         status = entity.status.name,
         transactionId = entity.transactionId,
-        paidAt = entity.paidAt
+        paidAt = entity.paidAt,
+        pixCode = entity.pixCode
     )
 }

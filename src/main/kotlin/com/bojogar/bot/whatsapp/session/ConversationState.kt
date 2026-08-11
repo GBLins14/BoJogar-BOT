@@ -6,5 +6,6 @@ enum class ConversationState {
     JOINING_PELADA,
     MANAGING_PELADA,
     EDITING_PELADA,
-    ENTERING_CODE
+    ENTERING_CODE,
+    ENTERING_CPF
 }

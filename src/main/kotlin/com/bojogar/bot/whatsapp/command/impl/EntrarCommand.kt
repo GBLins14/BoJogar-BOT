@@ -102,22 +102,32 @@ class EntrarCommand(
                         append("\uD83D\uDCCD ${pelada.local}\n")
                         append("\uD83D\uDCC5 ${pelada.dataHora.format(DATE_FMT)}\n")
                         if (pelada.valorPorJogador > java.math.BigDecimal.ZERO) {
-                            append("\n\uD83D\uDCB0 Valor: R$ ${pelada.valorPorJogador}\n")
-                            if (!pelada.chavePix.isNullOrBlank()) {
-                                append("\uD83D\uDCF2 Pix: ${pelada.chavePix}\n")
-                                append("\n_Envie o comprovante ao organizador para confirmar._")
-                            }
+                            append("\n\uD83D\uDCB0 *Valor:* R$ ${pelada.valorPorJogador}\n")
+                            append("\n_Pague via PIX para confirmar sua presenca!_")
                         }
                     }
                 )
-                ws.sendButtons(
-                    to = context.from,
-                    body = "O que deseja fazer?",
-                    buttons = listOf(
-                        Button(id = "/minhas", title = "Minhas Peladas"),
-                        Button(id = "/start", title = "Menu Inicial")
+
+                if (pelada.valorPorJogador > java.math.BigDecimal.ZERO) {
+                    ws.sendButtons(
+                        to = context.from,
+                        body = "Pague agora para garantir sua vaga!",
+                        buttons = listOf(
+                            Button(id = "/pagar gerar ${pelada.codigo}", title = "Pagar via PIX"),
+                            Button(id = "/minhas", title = "Minhas Peladas"),
+                            Button(id = "/start", title = "Menu Inicial")
+                        )
                     )
-                )
+                } else {
+                    ws.sendButtons(
+                        to = context.from,
+                        body = "O que deseja fazer?",
+                        buttons = listOf(
+                            Button(id = "/minhas", title = "Minhas Peladas"),
+                            Button(id = "/start", title = "Menu Inicial")
+                        )
+                    )
+                }
             }
             is JoinResult.Waitlisted -> {
                 ws.sendMessage(
@@ -133,7 +143,7 @@ class EntrarCommand(
                     to = context.from,
                     body = "O que deseja fazer?",
                     buttons = listOf(
-                        Button(id = "/peladas proximas", title = "Outras Peladas"),
+                        Button(id = "/entrar", title = "Tentar Outro Codigo"),
                         Button(id = "/start", title = "Menu Inicial")
                     )
                 )

@@ -143,13 +143,20 @@ class CriarCommand(
                     )
                     ws.sendMessage(
                         context.from,
-                        "\uD83D\uDCF2 *Chave Pix:*\n\nDigite a chave Pix para receber pagamentos"
+                        "\uD83D\uDCF2 *Chave Pix (obrigatorio):*\n\nDigite a chave Pix para receber os pagamentos dos jogadores.\n\n_Os valores serao repassados automaticamente com taxa de 10% da plataforma._"
                     )
                 } else {
                     showSummary(context, ws)
                 }
             }
             "pixKey" -> {
+                if (value.isBlank()) {
+                    ws.sendMessage(
+                        context.from,
+                        "\u26A0\uFE0F A chave Pix e obrigatoria para peladas pagas.\nDigite sua chave Pix (CPF, email, telefone ou chave aleatoria):"
+                    )
+                    return
+                }
                 sessionManager.updateSession(context.from, "pixKey", value, null)
                 showSummary(context, ws)
             }
@@ -214,6 +221,11 @@ class CriarCommand(
             val dateTime = LocalDateTime.parse(fields["dataHora"] ?: throw IllegalArgumentException("Data obrigatoria"))
             val maxPlayers = fields["maxPlayers"]?.toInt() ?: throw IllegalArgumentException("Limite obrigatorio")
             val price = fields["price"]?.toBigDecimal() ?: BigDecimal.ZERO
+            val pixKey = fields["pixKey"]
+
+            if (price > BigDecimal.ZERO && pixKey.isNullOrBlank()) {
+                throw IllegalArgumentException("Chave Pix obrigatoria para peladas pagas")
+            }
 
             val pelada = peladaService.create(
                 phone = context.from,
@@ -244,6 +256,7 @@ class CriarCommand(
                 to = context.from,
                 body = "O que deseja fazer?",
                 buttons = listOf(
+                    Button(id = "/gerenciar convidar ${pelada.codigo}", title = "Convidar Amigos"),
                     Button(id = "/gerenciar pelada ${pelada.codigo}", title = "Gerenciar"),
                     Button(id = "/start", title = "Menu Inicial")
                 )

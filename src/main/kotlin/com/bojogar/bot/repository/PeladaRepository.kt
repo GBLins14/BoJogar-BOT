@@ -14,7 +14,5 @@ interface PeladaRepository : JpaRepository<Pelada, UUID> {
 
     fun findByStatusIn(statuses: List<StatusPelada>): List<Pelada>
 
-    fun findByStatusInAndDataHoraAfter(statuses: List<StatusPelada>, after: LocalDateTime): List<Pelada>
-
     fun findByStatusInAndDataHoraBefore(statuses: List<StatusPelada>, before: LocalDateTime): List<Pelada>
 }

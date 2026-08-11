@@ -12,5 +12,6 @@ data class PaymentResponse(
     val valor: BigDecimal,
     val status: String,
     val transactionId: String?,
-    val paidAt: Instant?
+    val paidAt: Instant?,
+    val pixCode: String? = null
 )

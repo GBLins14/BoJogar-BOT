@@ -7,5 +7,6 @@ data class WhatsAppProperties(
     val token: String,
     val phoneNumberId: String,
     val verifyToken: String,
-    val apiVersion: String = "v22.0"
+    val apiVersion: String = "v22.0",
+    val phoneNumber: String = ""
 )

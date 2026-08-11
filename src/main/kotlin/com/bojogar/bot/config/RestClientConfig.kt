@@ -22,4 +22,13 @@ class RestClientConfig {
             .defaultHeader("Content-Type", "application/json")
             .build()
     }
+
+    @Bean
+    fun syncPayRestClient(properties: SyncPayProperties): RestClient {
+        log.info("SyncPay REST client configured — baseUrl: {}", properties.baseUrl)
+        return RestClient.builder()
+            .baseUrl(properties.baseUrl)
+            .defaultHeader("Content-Type", "application/json")
+            .build()
+    }
 }

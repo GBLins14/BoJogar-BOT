@@ -9,4 +9,6 @@ interface PagamentoRepository : JpaRepository<Pagamento, UUID> {
     fun findByParticipantId(participantId: UUID): List<Pagamento>
 
     fun findByParticipantPeladaCodigo(codigo: String): List<Pagamento>
+
+    fun findBySyncpayIdentifier(syncpayIdentifier: String): Pagamento?
 }

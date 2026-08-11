@@ -58,4 +58,24 @@ class UserService(
         user.name = name
         return userMapper.toResponse(userRepository.save(user))
     }
+
+    @Transactional
+    fun updateCpf(phone: String, cpf: String): UserResponse {
+        val user = userRepository.findByPhone(PhoneUtils.normalizePhone(phone))
+            ?: throw IllegalArgumentException("User not found: $phone")
+        user.cpf = cpf
+        return userMapper.toResponse(userRepository.save(user))
+    }
+
+    @Transactional(readOnly = true)
+    fun getUserCpf(phone: String): String? {
+        val user = userRepository.findByPhone(PhoneUtils.normalizePhone(phone))
+        return user?.cpf
+    }
+
+    @Transactional(readOnly = true)
+    fun getUserEmail(phone: String): String? {
+        val user = userRepository.findByPhone(PhoneUtils.normalizePhone(phone))
+        return user?.email
+    }
 }

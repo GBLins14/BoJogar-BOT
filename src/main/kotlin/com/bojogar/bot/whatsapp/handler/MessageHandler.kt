@@ -145,6 +145,10 @@ class MessageHandler(
                     val field = session.nextField ?: ""
                     commandProcessor.process(context.copy(rawMessage = "/gerenciar editar_campo $code $field $rawMessage"))
                 }
+                ConversationState.ENTERING_CPF -> {
+                    val code = session.currentPeladaCode ?: ""
+                    commandProcessor.process(context.copy(rawMessage = "/pagar cpf_input $code $rawMessage"))
+                }
                 else -> {
                     commandProcessor.process(context.copy(rawMessage = "/start"))
                 }

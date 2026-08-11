@@ -27,7 +27,7 @@ class StartCommand(
                 append("O que deseja fazer?")
             },
             buttons = listOf(
-                Button(id = "/peladas", title = "Ver Peladas"),
+                Button(id = "/entrar", title = "Entrar com Codigo"),
                 Button(id = "/minhas", title = "Minhas Peladas"),
                 Button(id = "/criar", title = "Criar Pelada")
             ),

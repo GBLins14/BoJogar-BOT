@@ -1,5 +1,6 @@
 package com.bojogar.bot.whatsapp.command.impl
 
+import com.bojogar.bot.config.WhatsAppProperties
 import com.bojogar.bot.dto.request.UpdatePeladaRequest
 import com.bojogar.bot.service.*
 import com.bojogar.bot.util.PhoneUtils
@@ -14,7 +15,9 @@ import com.bojogar.bot.whatsapp.session.SessionManager
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 
 @Component
 class GerenciarCommand(
@@ -23,7 +26,8 @@ class GerenciarCommand(
     private val participantService: ParticipantService,
     private val pagamentoService: PagamentoService,
     private val notificationService: NotificationService,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val whatsAppProperties: WhatsAppProperties
 ) : BotCommand {
 
     override val name = "/gerenciar"
@@ -49,6 +53,7 @@ class GerenciarCommand(
             "editar_campo" -> editarCampo(context, whatsappService)
             "cancelar" -> showCancelar(context, whatsappService)
             "cancelar_sim" -> confirmarCancelamento(context, whatsappService)
+            "convidar" -> showConvidar(context, whatsappService)
             else -> showManagedPeladas(context, whatsappService)
         }
     }
@@ -124,14 +129,33 @@ class GerenciarCommand(
             }
         )
 
-        ws.sendButtons(
+        val sections = mutableListOf<ListSection>()
+        sections.add(
+            ListSection(
+                title = "Gestao",
+                rows = listOf(
+                    ListRow(id = "/gerenciar participantes $code", title = "Participantes", description = "${pelada.confirmedCount} confirmados"),
+                    ListRow(id = "/gerenciar financeiro $code", title = "Financeiro", description = "Pagamentos e valores"),
+                    ListRow(id = "/gerenciar convidar $code", title = "Convidar Amigos", description = "Gerar link de convite")
+                )
+            )
+        )
+        sections.add(
+            ListSection(
+                title = "Configuracao",
+                rows = listOf(
+                    ListRow(id = "/gerenciar editar $code", title = "Editar Pelada", description = "Local, data, valor..."),
+                    ListRow(id = "/gerenciar cancelar $code", title = "Cancelar Pelada", description = "Cancelar e notificar todos")
+                )
+            )
+        )
+
+        ws.sendList(
             to = context.from,
             body = "O que deseja fazer?",
-            buttons = listOf(
-                Button(id = "/gerenciar participantes $code", title = "Participantes"),
-                Button(id = "/gerenciar financeiro $code", title = "Financeiro"),
-                Button(id = "/gerenciar cancelar $code", title = "Cancelar Pelada")
-            )
+            buttonLabel = "Ver Opcoes",
+            sections = sections,
+            footer = "BoJogar"
         )
     }
 
@@ -152,6 +176,10 @@ class GerenciarCommand(
 
         val confirmed = participants.filter { it.status == "CONFIRMED" }
         val waitlisted = participants.filter { it.status == "WAITLIST" }
+        val pelada = peladaService.findByCode(code)
+        val isPaid = pelada != null && pelada.valorPorJogador > BigDecimal.ZERO
+        val payments = if (isPaid) pagamentoService.getPaymentsByPelada(code) else emptyList()
+        val paidPhones = payments.filter { it.status == "CONFIRMADO" }.map { it.participantPhone }.toSet()
 
         val sections = mutableListOf<ListSection>()
 
@@ -161,10 +189,13 @@ class GerenciarCommand(
                     title = "Confirmados (${confirmed.size})",
                     rows = confirmed.take(10).map { p ->
                         val roleLabel = if (p.role != "PLAYER") " [${p.role}]" else ""
+                        val paymentLabel = if (isPaid) {
+                            if (p.userPhone in paidPhones) " | Pago" else " | Pendente"
+                        } else ""
                         ListRow(
                             id = "/gerenciar remover $code ${p.userPhone}",
                             title = "${p.displayName ?: p.userName}$roleLabel",
-                            description = PhoneUtils.formatPhoneDisplay(p.userPhone)
+                            description = "${PhoneUtils.formatPhoneDisplay(p.userPhone)}$paymentLabel"
                         )
                     }
                 )
@@ -395,14 +426,24 @@ class GerenciarCommand(
             }
         )
 
-        ws.sendButtons(
+        ws.sendList(
             to = context.from,
             body = "Selecione o campo para editar:",
-            buttons = listOf(
-                Button(id = "/gerenciar editar_campo $code local", title = "Editar Local"),
-                Button(id = "/gerenciar editar_campo $code limite", title = "Editar Limite"),
-                Button(id = "/gerenciar pelada $code", title = "Voltar")
-            )
+            buttonLabel = "Ver Campos",
+            sections = listOf(
+                ListSection(
+                    title = "Campos Editaveis",
+                    rows = listOf(
+                        ListRow(id = "/gerenciar editar_campo $code local", title = "Local", description = pelada.local.take(30)),
+                        ListRow(id = "/gerenciar editar_campo $code dataHora", title = "Data/Hora", description = pelada.dataHora.format(DATE_FMT)),
+                        ListRow(id = "/gerenciar editar_campo $code limite", title = "Limite de Jogadores", description = "${pelada.limiteJogadores} jogadores"),
+                        ListRow(id = "/gerenciar editar_campo $code valor", title = "Valor por Jogador", description = "R$ ${pelada.valorPorJogador}"),
+                        ListRow(id = "/gerenciar editar_campo $code descricao", title = "Descricao", description = (pelada.descricao ?: "-").take(30)),
+                        ListRow(id = "/gerenciar editar_campo $code chavePix", title = "Chave Pix", description = (pelada.chavePix ?: "-").take(30))
+                    )
+                )
+            ),
+            footer = "BoJogar"
         )
     }
 
@@ -425,6 +466,8 @@ class GerenciarCommand(
                 "limite" -> "novo limite de jogadores"
                 "valor" -> "novo valor por jogador"
                 "descricao" -> "nova descricao"
+                "dataHora" -> "nova data e horario (DD/MM HH:MM)"
+                "chavePix" -> "nova chave Pix"
                 else -> "novo valor"
             }
             ws.sendMessage(context.from, "\u270F\uFE0F Digite o $label:")
@@ -445,6 +488,15 @@ class GerenciarCommand(
                     UpdatePeladaRequest(valorPorJogador = valor)
                 }
                 "descricao" -> UpdatePeladaRequest(descricao = value)
+                "dataHora" -> {
+                    val dateTime = parseDateTime(value)
+                        ?: throw IllegalArgumentException("Formato invalido. Use DD/MM HH:MM")
+                    if (dateTime.isBefore(LocalDateTime.now())) {
+                        throw IllegalArgumentException("A data deve ser no futuro")
+                    }
+                    UpdatePeladaRequest(dataHora = dateTime)
+                }
+                "chavePix" -> UpdatePeladaRequest(chavePix = value)
                 else -> throw IllegalArgumentException("Campo desconhecido: $field")
             }
 
@@ -522,6 +574,73 @@ class GerenciarCommand(
             body = "O que deseja fazer?",
             buttons = listOf(
                 Button(id = "/criar", title = "Criar Pelada"),
+                Button(id = "/start", title = "Menu Inicial")
+            )
+        )
+    }
+
+    private fun parseDateTime(input: String): LocalDateTime? {
+        return try {
+            val clean = input.trim()
+            if (clean.contains("/") && clean.count { it == '/' } == 1) {
+                val parts = clean.split(" ", limit = 2)
+                val datePart = parts[0]
+                val timePart = parts.getOrElse(1) { "00:00" }
+                val year = LocalDateTime.now().year
+                LocalDateTime.parse("$datePart/$year $timePart", DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+            } else {
+                LocalDateTime.parse(clean, DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+            }
+        } catch (_: DateTimeParseException) {
+            null
+        }
+    }
+
+    private fun showConvidar(context: CommandContext, ws: WhatsAppService) {
+        val code = context.args.getOrNull(1) ?: return
+
+        if (!authorizationService.isAdminOrOwner(context.from, code)) {
+            ws.sendMessage(context.from, "\u274C Sem permissao.")
+            return
+        }
+
+        val pelada = peladaService.findByCode(code) ?: return
+
+        val phoneNumber = whatsAppProperties.phoneNumber
+        val deepLink = if (phoneNumber.isNotBlank()) {
+            "https://wa.me/$phoneNumber?text=$code"
+        } else {
+            null
+        }
+
+        val shareMessage = buildString {
+            append("Bora jogar! Entra na pelada comigo!\n\n")
+            append("\uD83C\uDFC6 *${pelada.esporteLabel}*\n")
+            append("\uD83D\uDCCD ${pelada.local}\n")
+            append("\uD83D\uDCC5 ${pelada.dataHora.format(DATE_FMT)}\n")
+            append("\uD83D\uDC65 ${pelada.remainingSlots} vagas restantes\n")
+            if (pelada.valorPorJogador > BigDecimal.ZERO) {
+                append("\uD83D\uDCB0 R$ ${pelada.valorPorJogador}\n")
+            } else {
+                append("\uD83D\uDCB0 Gratis\n")
+            }
+            if (deepLink != null) {
+                append("\nPara participar, clique no link:\n$deepLink\n")
+            }
+            append("\nOu envie o codigo *$code* para o bot BoJogar!")
+        }
+
+        ws.sendMessage(
+            context.from,
+            "\uD83D\uDCE8 *Link de Convite*\n\n_Encaminhe a mensagem abaixo para seus amigos:_"
+        )
+        ws.sendMessage(context.from, shareMessage)
+
+        ws.sendButtons(
+            to = context.from,
+            body = "O que deseja fazer?",
+            buttons = listOf(
+                Button(id = "/gerenciar pelada $code", title = "Menu Admin"),
                 Button(id = "/start", title = "Menu Inicial")
             )
         )

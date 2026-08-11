@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
+import java.time.format.DateTimeFormatter
 
 @Service
 class NotificationService(
@@ -52,10 +53,8 @@ class NotificationService(
             append("\uD83D\uDCC5 ${pelada.dataHora}\n\n")
             append("Voce foi *automaticamente confirmado*!")
             if (pelada.valorPorJogador > BigDecimal.ZERO) {
-                append("\n\n\uD83D\uDCB0 Valor: R$ ${pelada.valorPorJogador}")
-                if (!pelada.chavePix.isNullOrBlank()) {
-                    append("\n\uD83D\uDCF2 Pix: ${pelada.chavePix}")
-                }
+                append("\n\n\uD83D\uDCB0 *Valor:* R$ ${pelada.valorPorJogador}")
+                append("\n\nEnvie */pagar* para gerar o PIX e efetuar o pagamento.")
             }
         }
 
@@ -88,5 +87,39 @@ class NotificationService(
         }
 
         notifyUser(removed.userPhone, message)
+    }
+
+    @Async
+    fun notifyPaymentConfirmed(participantPhone: String, participantName: String, pelada: PeladaResponse) {
+        val dateFmt = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
+        val message = buildString {
+            append("\u2705 *Pagamento Confirmado!*\n\n")
+            append("Seu pagamento de *R$ ${pelada.valorPorJogador}* para a pelada *${pelada.codigo}* foi confirmado.\n\n")
+            append("\uD83C\uDFC6 ${pelada.esporteLabel}\n")
+            append("\uD83D\uDCCD ${pelada.local}\n")
+            append("\uD83D\uDCC5 ${pelada.dataHora.format(dateFmt)}\n\n")
+            append("Te vejo la, $participantName!")
+        }
+
+        notifyUser(participantPhone, message)
+    }
+
+    @Async
+    fun notifyAdminPaymentReceived(peladaCode: String, participantName: String, amount: BigDecimal) {
+        val admins = participantService.getActiveParticipants(peladaCode)
+            .filter { it.role in listOf("OWNER", "ADMIN") }
+
+        val message = buildString {
+            append("\uD83D\uDCB0 *Pagamento Recebido*\n\n")
+            append("*$participantName* pagou *R$ $amount* na pelada *$peladaCode*.")
+        }
+
+        admins.forEach { admin ->
+            try {
+                whatsappService.sendMessage(admin.userPhone, message)
+            } catch (e: Exception) {
+                log.warn("Failed to notify admin {}: {}", admin.userPhone, e.message)
+            }
+        }
     }
 }

@@ -31,11 +31,6 @@ class PeladaController(
             ?: throw ResourceNotFoundException("Pelada nao encontrada: $code")
     }
 
-    @GetMapping("/open")
-    fun findOpen(): List<PeladaResponse> {
-        return peladaService.findOpenPeladas()
-    }
-
     @GetMapping("/user")
     fun findByUser(@RequestHeader("X-User-Phone") phone: String): List<PeladaResponse> {
         return peladaService.findByUser(phone)

@@ -79,14 +79,6 @@ class PeladaService(
     }
 
     @Transactional(readOnly = true)
-    fun findOpenPeladas(): List<PeladaResponse> {
-        return peladaRepository.findByStatusInAndDataHoraAfter(
-            listOf(StatusPelada.OPEN, StatusPelada.FULL),
-            LocalDateTime.now()
-        ).map { peladaMapper.toResponse(it) }
-    }
-
-    @Transactional(readOnly = true)
     fun findByUser(phone: String): List<PeladaResponse> {
         val normalized = PhoneUtils.normalizePhone(phone)
         val participations = participantRepository.findByUserPhoneAndStatusIn(

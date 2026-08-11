@@ -11,5 +11,9 @@ class User(
     val phone: String,
 
     @Column(nullable = false)
-    var name: String
+    var name: String,
+
+    var cpf: String? = null,
+
+    var email: String? = null
 ) : BaseEntity()

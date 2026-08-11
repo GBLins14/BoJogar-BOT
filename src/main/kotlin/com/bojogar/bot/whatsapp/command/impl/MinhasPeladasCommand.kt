@@ -6,6 +6,7 @@ import com.bojogar.bot.service.AuthorizationService
 import com.bojogar.bot.service.LeaveResult
 import com.bojogar.bot.service.NotificationService
 import com.bojogar.bot.service.ParticipantService
+import com.bojogar.bot.service.PagamentoService
 import com.bojogar.bot.service.PeladaService
 import com.bojogar.bot.util.PhoneUtils
 import com.bojogar.bot.whatsapp.command.BotCommand
@@ -25,7 +26,8 @@ class MinhasPeladasCommand(
     private val participantService: ParticipantService,
     private val peladaService: PeladaService,
     private val authorizationService: AuthorizationService,
-    private val notificationService: NotificationService
+    private val notificationService: NotificationService,
+    private val pagamentoService: PagamentoService
 ) : BotCommand {
 
     override val name = "/minhas"
@@ -80,7 +82,7 @@ class MinhasPeladasCommand(
                 to = context.from,
                 body = "O que deseja fazer?",
                 buttons = listOf(
-                    Button(id = "/peladas proximas", title = "Ver Peladas"),
+                    Button(id = "/entrar", title = "Entrar com Codigo"),
                     Button(id = "/criar", title = "Criar Pelada"),
                     Button(id = "/start", title = "Menu Inicial")
                 )
@@ -166,12 +168,21 @@ class MinhasPeladasCommand(
 
         val buttons = mutableListOf<Button>()
 
+        // Check for pending payment
+        val pendingPayment = if (pelada.valorPorJogador > BigDecimal.ZERO) {
+            pagamentoService.findPendingPaymentForUser(context.from, codigo)
+        } else null
+
+        if (pendingPayment != null) {
+            buttons.add(Button(id = "/pagar gerar $codigo", title = "Pagar via PIX"))
+        }
+
         if (authorizationService.isAdminOrOwner(context.from, codigo)) {
             buttons.add(Button(id = "/gerenciar pelada $codigo", title = "Gerenciar"))
-        } else {
+        } else if (pendingPayment == null) {
             buttons.add(Button(id = "/minhas cancelar $codigo", title = "Cancelar Inscricao"))
         }
-        buttons.add(Button(id = "/minhas proximas", title = "Voltar"))
+        if (buttons.size < 3) buttons.add(Button(id = "/minhas proximas", title = "Voltar"))
         if (buttons.size < 3) buttons.add(Button(id = "/start", title = "Menu Inicial"))
 
         ws.sendButtons(to = context.from, body = "O que deseja fazer?", buttons = buttons.take(3))
@@ -222,7 +233,7 @@ class MinhasPeladasCommand(
             to = context.from,
             body = "O que deseja fazer agora?",
             buttons = listOf(
-                Button(id = "/peladas proximas", title = "Ver Peladas"),
+                Button(id = "/entrar", title = "Entrar com Codigo"),
                 Button(id = "/start", title = "Menu Inicial")
             )
         )
