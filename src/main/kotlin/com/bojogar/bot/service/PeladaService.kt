@@ -123,6 +123,7 @@ class PeladaService(
         }
 
         val participants = participantRepository.findByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.CONFIRMED) +
+            participantRepository.findByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.PENDING_PAYMENT) +
             participantRepository.findByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.WAITLIST)
 
         participants.forEach { p ->

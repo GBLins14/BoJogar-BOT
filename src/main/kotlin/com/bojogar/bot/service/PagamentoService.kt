@@ -49,7 +49,8 @@ class PagamentoService(
             ?: throw BusinessException("Pagamento pendente nao encontrado")
 
         val requesterNormalized = PhoneUtils.normalizePhone(requesterPhone)
-        val pelada = payment.participant.pelada
+        val participant = payment.participant
+        val pelada = participant.pelada
 
         val requesterParticipant = participantRepository.findByUserPhoneAndPeladaCodigo(requesterNormalized, pelada.codigo)
         if (requesterParticipant == null || !requesterParticipant.role.hasAuthority(com.bojogar.bot.enums.ParticipantRole.ADMIN)) {
@@ -58,6 +59,14 @@ class PagamentoService(
 
         payment.status = StatusPagamento.CONFIRMADO
         payment.paidAt = Instant.now()
+
+        // Promote participant from PENDING_PAYMENT to CONFIRMED
+        if (participant.status == ParticipantStatus.PENDING_PAYMENT) {
+            participant.status = ParticipantStatus.CONFIRMED
+            participantRepository.save(participant)
+            updatePeladaStatusAfterPayment(pelada)
+            log.info("Participant {} promoted to CONFIRMED after manual payment confirmation", participantId)
+        }
 
         log.info("Payment confirmed for participant {} in pelada {} by {}", participantId, pelada.codigo, requesterNormalized)
         return paymentMapper.toResponse(pagamentoRepository.save(payment))
@@ -134,6 +143,15 @@ class PagamentoService(
 
         // Access lazy fields while session is still open
         val participant = payment.participant
+
+        // Promote participant from PENDING_PAYMENT to CONFIRMED
+        if (participant.status == ParticipantStatus.PENDING_PAYMENT) {
+            participant.status = ParticipantStatus.CONFIRMED
+            participantRepository.save(participant)
+            val pelada2 = participant.pelada
+            updatePeladaStatusAfterPayment(pelada2)
+            log.info("Participant {} promoted to CONFIRMED after webhook payment", participant.id)
+        }
         val pelada = participant.pelada
         val participantPhone = participant.user.phone
         val participantName = participant.displayName ?: participant.user.name
@@ -198,12 +216,9 @@ class PagamentoService(
     @Transactional(readOnly = true)
     fun getUnpaidParticipants(peladaCode: String): List<com.bojogar.bot.dto.response.ParticipantResponse> {
         val pelada = peladaRepository.findByCodigo(peladaCode.uppercase()) ?: return emptyList()
-        val confirmed = participantRepository.findByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.CONFIRMED)
+        val pendingPayment = participantRepository.findByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.PENDING_PAYMENT)
 
-        return confirmed.filter { participant ->
-            val payments = pagamentoRepository.findByParticipantId(participant.id!!)
-            payments.none { it.status == StatusPagamento.CONFIRMADO }
-        }.map { participantMapper.toResponse(it) }
+        return pendingPayment.map { participantMapper.toResponse(it) }
     }
 
     @Transactional(readOnly = true)
@@ -222,12 +237,23 @@ class PagamentoService(
         val normalized = PhoneUtils.normalizePhone(phone)
         val participations = participantRepository.findByUserPhoneAndStatusIn(
             normalized,
-            listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST)
+            listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.PENDING_PAYMENT, ParticipantStatus.WAITLIST)
         )
         return participations.flatMap { participant ->
             pagamentoRepository.findByParticipantId(participant.id!!)
                 .filter { it.status == StatusPagamento.PENDENTE }
                 .map { paymentMapper.toResponse(it) }
+        }
+    }
+
+    private fun updatePeladaStatusAfterPayment(pelada: com.bojogar.bot.entity.Pelada) {
+        if (pelada.limiteJogadores > 0 && pelada.status == com.bojogar.bot.enums.StatusPelada.OPEN) {
+            val confirmedCount = participantRepository.countByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.CONFIRMED)
+            if (confirmedCount >= pelada.limiteJogadores) {
+                pelada.status = com.bojogar.bot.enums.StatusPelada.FULL
+                peladaRepository.save(pelada)
+                log.info("Pelada {} is now FULL after payment confirmation", pelada.codigo)
+            }
         }
     }
 

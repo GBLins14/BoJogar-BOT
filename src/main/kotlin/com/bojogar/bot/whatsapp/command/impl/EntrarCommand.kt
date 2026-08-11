@@ -75,9 +75,6 @@ class EntrarCommand(
                 }
                 if (pelada.valorPorJogador > java.math.BigDecimal.ZERO) {
                     append("\uD83D\uDCB0 *Valor:* R$ ${pelada.valorPorJogador}\n")
-                    if (!pelada.chavePix.isNullOrBlank()) {
-                        append("\uD83D\uDCF2 *Pix:* ${pelada.chavePix}\n")
-                    }
                 } else {
                     append("\uD83D\uDCB0 *Valor:* Gratis\n")
                 }
@@ -104,34 +101,40 @@ class EntrarCommand(
                         append("\u2705 *Inscricao Confirmada!*\n\n")
                         append("Pelada *${pelada.codigo}* — ${pelada.esporteLabel}\n")
                         append("\uD83D\uDCCD ${pelada.local}\n")
-                        append("\uD83D\uDCC5 ${pelada.dataHora.format(DATE_FMT)}\n")
-                        if (pelada.valorPorJogador > java.math.BigDecimal.ZERO) {
-                            append("\n\uD83D\uDCB0 *Valor:* R$ ${pelada.valorPorJogador}\n")
-                            append("\n_Pague via PIX para confirmar sua presenca!_")
-                        }
+                        append("\uD83D\uDCC5 ${pelada.dataHora.format(DATE_FMT)}")
                     }
                 )
-
-                if (pelada.valorPorJogador > java.math.BigDecimal.ZERO) {
-                    ws.sendButtons(
-                        to = context.from,
-                        body = "Pague agora para garantir sua vaga!",
-                        buttons = listOf(
-                            Button(id = "/pagar gerar ${pelada.codigo}", title = "Pagar via PIX"),
-                            Button(id = "/minhas", title = "Minhas Peladas"),
-                            Button(id = "/start", title = "Menu Inicial")
-                        )
+                ws.sendButtons(
+                    to = context.from,
+                    body = "O que deseja fazer?",
+                    buttons = listOf(
+                        Button(id = "/minhas", title = "Minhas Peladas"),
+                        Button(id = "/start", title = "Menu Inicial")
                     )
-                } else {
-                    ws.sendButtons(
-                        to = context.from,
-                        body = "O que deseja fazer?",
-                        buttons = listOf(
-                            Button(id = "/minhas", title = "Minhas Peladas"),
-                            Button(id = "/start", title = "Menu Inicial")
-                        )
+                )
+            }
+            is JoinResult.PendingPayment -> {
+                val pelada = result.pelada
+                ws.sendMessage(
+                    context.from,
+                    buildString {
+                        append("\uD83D\uDCB0 *Pagamento Necessario!*\n\n")
+                        append("Pelada *${pelada.codigo}* — ${pelada.esporteLabel}\n")
+                        append("\uD83D\uDCCD ${pelada.local}\n")
+                        append("\uD83D\uDCC5 ${pelada.dataHora.format(DATE_FMT)}\n\n")
+                        append("*Valor:* R$ ${pelada.valorPorJogador}\n\n")
+                        append("_Sua vaga so sera garantida apos o pagamento!_")
+                    }
+                )
+                ws.sendButtons(
+                    to = context.from,
+                    body = "Pague agora para garantir sua vaga!",
+                    buttons = listOf(
+                        Button(id = "/pagar gerar ${pelada.codigo}", title = "Pagar via PIX"),
+                        Button(id = "/minhas", title = "Minhas Peladas"),
+                        Button(id = "/start", title = "Menu Inicial")
                     )
-                }
+                )
             }
             is JoinResult.Waitlisted -> {
                 ws.sendMessage(

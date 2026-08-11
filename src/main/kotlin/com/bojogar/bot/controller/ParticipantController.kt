@@ -28,6 +28,7 @@ class ParticipantController(
     ): ResponseEntity<Any> {
         return when (val result = participantService.join(phone, code)) {
             is JoinResult.Confirmed -> ResponseEntity.status(HttpStatus.CREATED).body(result.participant)
+            is JoinResult.PendingPayment -> ResponseEntity.status(HttpStatus.CREATED).body(mapOf("status" to "PENDING_PAYMENT", "participant" to result.participant))
             is JoinResult.Waitlisted -> ResponseEntity.ok(mapOf("status" to "WAITLIST", "position" to result.position))
             is JoinResult.AlreadyJoined -> throw BusinessException("Ja inscrito nesta pelada")
             is JoinResult.PeladaClosed -> throw BusinessException("Pelada nao esta aberta")

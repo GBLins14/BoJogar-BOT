@@ -285,19 +285,7 @@ class PagarCommand(
                 )
             }
             is PixGenerationResult.Error -> {
-                val pelada = peladaService.findByCode(code)
                 ws.sendMessage(context.from, "\u274C Erro ao gerar PIX. Tente novamente mais tarde.")
-                if (pelada != null && !pelada.chavePix.isNullOrBlank()) {
-                    ws.sendMessage(
-                        context.from,
-                        buildString {
-                            append("Voce pode pagar manualmente:\n\n")
-                            append("\uD83D\uDCF2 *Chave Pix:* ${pelada.chavePix}\n")
-                            append("\uD83D\uDCB5 *Valor:* R$ ${pelada.valorPorJogador}\n\n")
-                            append("_Envie o comprovante ao organizador._")
-                        }
-                    )
-                }
                 ws.sendButtons(
                     to = context.from,
                     body = "O que deseja fazer?",

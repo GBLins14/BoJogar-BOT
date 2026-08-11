@@ -24,6 +24,7 @@ import java.util.UUID
 
 sealed interface JoinResult {
     data class Confirmed(val participant: ParticipantResponse, val pelada: PeladaResponse) : JoinResult
+    data class PendingPayment(val participant: ParticipantResponse, val pelada: PeladaResponse) : JoinResult
     data class Waitlisted(val pelada: PeladaResponse, val position: Int) : JoinResult
     data object AlreadyJoined : JoinResult
     data object PeladaClosed : JoinResult
@@ -71,15 +72,34 @@ class ParticipantService(
             ?: return JoinResult.Error("Usuario nao encontrado")
 
         val existing = participantRepository.findByPeladaIdAndUserId(pelada.id!!, user.id!!)
-        if (existing != null && existing.status in listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST)) {
+        if (existing != null && existing.status in listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.PENDING_PAYMENT, ParticipantStatus.WAITLIST)) {
             return JoinResult.AlreadyJoined
         }
+
+        val isPaid = pelada.valorPorJogador > BigDecimal.ZERO
 
         return synchronized(peladaCode.uppercase().intern()) {
             val confirmedCount = participantRepository.countByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.CONFIRMED)
             val hasSlot = pelada.limiteJogadores == 0 || confirmedCount < pelada.limiteJogadores
 
-            if (hasSlot) {
+            if (isPaid) {
+                // Paid pelada: participant starts as PENDING_PAYMENT (doesn't take a slot)
+                val participant = participantRepository.save(
+                    PeladaParticipant(
+                        user = user,
+                        pelada = pelada,
+                        role = ParticipantRole.PLAYER,
+                        displayName = user.name,
+                        status = ParticipantStatus.PENDING_PAYMENT
+                    )
+                )
+
+                createPaymentIfNeeded(participant, pelada)
+
+                log.info("User {} joined pelada {} as PENDING_PAYMENT", normalized, peladaCode)
+                JoinResult.PendingPayment(participantMapper.toResponse(participant), peladaMapper.toResponse(pelada))
+            } else if (hasSlot) {
+                // Free pelada: confirm immediately
                 val participant = participantRepository.save(
                     PeladaParticipant(
                         user = user,
@@ -90,8 +110,6 @@ class ParticipantService(
                     )
                 )
 
-                createPaymentIfNeeded(participant, pelada)
-
                 if (pelada.limiteJogadores > 0 && confirmedCount + 1 >= pelada.limiteJogadores && pelada.status == StatusPelada.OPEN) {
                     pelada.status = StatusPelada.FULL
                     peladaRepository.save(pelada)
@@ -101,6 +119,7 @@ class ParticipantService(
                 log.info("User {} joined pelada {} as CONFIRMED", normalized, peladaCode)
                 JoinResult.Confirmed(participantMapper.toResponse(participant), peladaMapper.toResponse(pelada))
             } else {
+                // Free pelada but full: waitlist
                 val waitlistCount = participantRepository.countByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.WAITLIST)
                 val position = (waitlistCount + 1).toInt()
 
@@ -131,7 +150,7 @@ class ParticipantService(
             return LeaveResult.Error("O organizador nao pode sair da pelada. Use /gerenciar cancelar para cancelar.")
         }
 
-        if (participant.status !in listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST)) {
+        if (participant.status !in listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.PENDING_PAYMENT, ParticipantStatus.WAITLIST)) {
             return LeaveResult.NotFound
         }
 
@@ -197,7 +216,7 @@ class ParticipantService(
     @Transactional(readOnly = true)
     fun getActiveParticipants(peladaCode: String): List<ParticipantResponse> {
         return getParticipants(peladaCode).filter {
-            it.status in listOf(ParticipantStatus.CONFIRMED.name, ParticipantStatus.WAITLIST.name)
+            it.status in listOf(ParticipantStatus.CONFIRMED.name, ParticipantStatus.PENDING_PAYMENT.name, ParticipantStatus.WAITLIST.name)
         }
     }
 
@@ -235,7 +254,7 @@ class ParticipantService(
     fun getUserParticipations(phone: String, activeOnly: Boolean = true): List<ParticipantResponse> {
         val normalized = PhoneUtils.normalizePhone(phone)
         val statuses = if (activeOnly) {
-            listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST)
+            listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.PENDING_PAYMENT, ParticipantStatus.WAITLIST)
         } else {
             ParticipantStatus.entries
         }

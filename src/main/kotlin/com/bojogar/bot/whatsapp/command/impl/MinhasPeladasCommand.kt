@@ -91,6 +91,7 @@ class MinhasPeladasCommand(
         }
 
         val confirmed = upcoming.filter { it.status == "CONFIRMED" }
+        val pendingPayment = upcoming.filter { it.status == "PENDING_PAYMENT" }
         val waitlisted = upcoming.filter { it.status == "WAITLIST" }
 
         val sections = mutableListOf<ListSection>()
@@ -105,6 +106,22 @@ class MinhasPeladasCommand(
                             id = "/minhas ver ${p.peladaCodigo}",
                             title = "${pel.esporteLabel} - ${pel.local.take(20)}",
                             description = "${pel.dataHora.format(DATE_FMT_SHORT)} | Confirmado"
+                        )
+                    }
+                )
+            )
+        }
+
+        if (pendingPayment.isNotEmpty()) {
+            sections.add(
+                ListSection(
+                    title = "Aguardando Pagamento",
+                    rows = pendingPayment.take(10).mapNotNull { p ->
+                        val pel = peladaMap[p.peladaCodigo] ?: return@mapNotNull null
+                        ListRow(
+                            id = "/minhas ver ${p.peladaCodigo}",
+                            title = "${pel.esporteLabel} - ${pel.local.take(20)}",
+                            description = "${pel.dataHora.format(DATE_FMT_SHORT)} | Pagar"
                         )
                     }
                 )
@@ -153,7 +170,12 @@ class MinhasPeladasCommand(
         val participants = participantService.getParticipants(codigo)
         val normalized = PhoneUtils.normalizePhone(context.from)
         val myParticipation = participants.find { it.userPhone == normalized }
-        val statusLabel = myParticipation?.status ?: "Nao inscrito"
+        val statusLabel = when (myParticipation?.status) {
+            "CONFIRMED" -> "Confirmado"
+            "PENDING_PAYMENT" -> "Aguardando Pagamento"
+            "WAITLIST" -> "Lista de Espera"
+            else -> "Nao inscrito"
+        }
 
         ws.sendMessage(
             context.from,

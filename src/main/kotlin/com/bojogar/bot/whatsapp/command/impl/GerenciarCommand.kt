@@ -182,11 +182,9 @@ class GerenciarCommand(
         }
 
         val confirmed = participants.filter { it.status == "CONFIRMED" }
+        val pendingPayment = participants.filter { it.status == "PENDING_PAYMENT" }
         val waitlisted = participants.filter { it.status == "WAITLIST" }
         val pelada = peladaService.findByCode(code)
-        val isPaid = pelada != null && pelada.valorPorJogador > BigDecimal.ZERO
-        val payments = if (isPaid) pagamentoService.getPaymentsByPelada(code) else emptyList()
-        val paidPhones = payments.filter { it.status == "CONFIRMADO" }.map { it.participantPhone }.toSet()
 
         val sections = mutableListOf<ListSection>()
 
@@ -196,13 +194,26 @@ class GerenciarCommand(
                     title = "Confirmados (${confirmed.size})",
                     rows = confirmed.take(10).map { p ->
                         val roleLabel = if (p.role != "PLAYER") " [${p.role}]" else ""
-                        val paymentLabel = if (isPaid) {
-                            if (p.userPhone in paidPhones) " | Pago" else " | Pendente"
-                        } else ""
                         ListRow(
                             id = "/gerenciar remover $code ${p.userPhone}",
                             title = "${p.displayName ?: p.userName}$roleLabel",
-                            description = "${PhoneUtils.formatPhoneDisplay(p.userPhone)}$paymentLabel"
+                            description = "${PhoneUtils.formatPhoneDisplay(p.userPhone)} | Pago"
+                        )
+                    }
+                )
+            )
+        }
+
+        if (pendingPayment.isNotEmpty()) {
+            sections.add(
+                ListSection(
+                    title = "Aguardando Pagamento (${pendingPayment.size})",
+                    rows = pendingPayment.take(10).map { p ->
+                        val roleLabel = if (p.role != "PLAYER") " [${p.role}]" else ""
+                        ListRow(
+                            id = "/gerenciar remover $code ${p.userPhone}",
+                            title = "${p.displayName ?: p.userName}$roleLabel",
+                            description = "${PhoneUtils.formatPhoneDisplay(p.userPhone)} | Pendente"
                         )
                     }
                 )

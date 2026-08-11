@@ -93,12 +93,12 @@ class NotificationService(
     fun notifyPaymentConfirmed(participantPhone: String, participantName: String, pelada: PeladaResponse) {
         val dateFmt = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
         val message = buildString {
-            append("\u2705 *Pagamento Confirmado!*\n\n")
+            append("\u2705 *Pagamento Confirmado — Vaga Garantida!*\n\n")
             append("Seu pagamento de *R$ ${pelada.valorPorJogador}* para a pelada *${pelada.codigo}* foi confirmado.\n\n")
             append("\uD83C\uDFC6 ${pelada.esporteLabel}\n")
             append("\uD83D\uDCCD ${pelada.local}\n")
             append("\uD83D\uDCC5 ${pelada.dataHora.format(dateFmt)}\n\n")
-            append("Te vejo la, $participantName!")
+            append("Sua vaga esta garantida! Te vejo la, $participantName!")
         }
 
         notifyUser(participantPhone, message)
