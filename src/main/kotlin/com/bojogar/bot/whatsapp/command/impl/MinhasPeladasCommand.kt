@@ -189,7 +189,7 @@ class MinhasPeladasCommand(
     }
 
     private fun showCancelar(context: CommandContext, ws: WhatsAppService) {
-        val codigo = context.args.getOrNull(1) ?: return
+        val codigo = context.args.getOrNull(1) ?: return showProximas(context, ws)
         ws.sendButtons(
             to = context.from,
             header = "Cancelar Inscricao",
@@ -202,7 +202,7 @@ class MinhasPeladasCommand(
     }
 
     private fun confirmarCancelamento(context: CommandContext, ws: WhatsAppService) {
-        val codigo = context.args.getOrNull(1) ?: return
+        val codigo = context.args.getOrNull(1) ?: return showProximas(context, ws)
 
         when (val result = participantService.leave(context.from, codigo)) {
             is LeaveResult.Left -> {
@@ -225,7 +225,7 @@ class MinhasPeladasCommand(
                 ws.sendMessage(context.from, "\u26A0\uFE0F Inscricao nao encontrada.")
             }
             is LeaveResult.Error -> {
-                ws.sendMessage(context.from, "\u274C ${result.message}")
+                ws.sendMessage(context.from, "\u274C Ocorreu um erro. Tente novamente mais tarde.")
             }
         }
 

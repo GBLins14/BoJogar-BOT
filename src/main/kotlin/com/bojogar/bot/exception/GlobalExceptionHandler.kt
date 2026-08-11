@@ -46,7 +46,7 @@ class GlobalExceptionHandler {
         val error = ErrorResponse(
             status = 400,
             error = "Bad Request",
-            message = "JSON invalido: ${ex.message}"
+            message = "JSON invalido ou mal formatado"
         )
         return ResponseEntity.badRequest().body(error)
     }
@@ -57,7 +57,7 @@ class GlobalExceptionHandler {
         val error = ErrorResponse(
             status = 500,
             error = "Internal Server Error",
-            message = ex.message ?: "Erro interno"
+            message = "Erro interno do servidor"
         )
         return ResponseEntity.status(500).body(error)
     }

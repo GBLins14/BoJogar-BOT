@@ -115,7 +115,10 @@ class GerenciarCommand(
     }
 
     private fun showPeladaAdminFor(context: CommandContext, ws: WhatsAppService, code: String) {
-        val pelada = peladaService.findByCode(code) ?: return
+        val pelada = peladaService.findByCode(code) ?: run {
+            ws.sendMessage(context.from, "\u26A0\uFE0F Pelada *$code* nao encontrada.")
+            return
+        }
 
         ws.sendMessage(
             context.from,
@@ -164,7 +167,7 @@ class GerenciarCommand(
     }
 
     private fun showParticipantes(context: CommandContext, ws: WhatsAppService) {
-        val code = context.args.getOrNull(1) ?: return
+        val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
 
         if (!authorizationService.isAdminOrOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Sem permissao.")
@@ -232,8 +235,8 @@ class GerenciarCommand(
     }
 
     private fun showRemover(context: CommandContext, ws: WhatsAppService) {
-        val code = context.args.getOrNull(1) ?: return
-        val phone = context.args.getOrNull(2) ?: return
+        val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
+        val phone = context.args.getOrNull(2) ?: return showParticipantes(context, ws)
 
         if (!authorizationService.isAdminOrOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Sem permissao.")
@@ -260,8 +263,8 @@ class GerenciarCommand(
     }
 
     private fun confirmarRemocao(context: CommandContext, ws: WhatsAppService) {
-        val code = context.args.getOrNull(1) ?: return
-        val phone = context.args.getOrNull(2) ?: return
+        val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
+        val phone = context.args.getOrNull(2) ?: return showParticipantes(context, ws)
 
         when (val result = participantService.removeParticipant(context.from, phone, code)) {
             is RemoveResult.Removed -> {
@@ -286,7 +289,7 @@ class GerenciarCommand(
             }
             is RemoveResult.NotFound -> ws.sendMessage(context.from, "\u26A0\uFE0F Participante nao encontrado.")
             is RemoveResult.Unauthorized -> ws.sendMessage(context.from, "\u274C Sem permissao.")
-            is RemoveResult.Error -> ws.sendMessage(context.from, "\u274C ${result.message}")
+            is RemoveResult.Error -> ws.sendMessage(context.from, "\u274C Ocorreu um erro. Tente novamente mais tarde.")
         }
 
         ws.sendButtons(
@@ -300,8 +303,8 @@ class GerenciarCommand(
     }
 
     private fun confirmarPagamento(context: CommandContext, ws: WhatsAppService) {
-        val code = context.args.getOrNull(1) ?: return
-        val phone = context.args.getOrNull(2) ?: return
+        val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
+        val phone = context.args.getOrNull(2) ?: return showManagedPeladas(context, ws)
 
         if (!authorizationService.isAdminOrOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Sem permissao.")
@@ -338,7 +341,7 @@ class GerenciarCommand(
     }
 
     private fun showFinanceiro(context: CommandContext, ws: WhatsAppService) {
-        val code = context.args.getOrNull(1) ?: return
+        val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
 
         if (!authorizationService.isAdminOrOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Sem permissao.")
@@ -409,14 +412,17 @@ class GerenciarCommand(
     }
 
     private fun showEditar(context: CommandContext, ws: WhatsAppService) {
-        val code = context.args.getOrNull(1) ?: return
+        val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
 
         if (!authorizationService.isAdminOrOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Sem permissao.")
             return
         }
 
-        val pelada = peladaService.findByCode(code) ?: return
+        val pelada = peladaService.findByCode(code) ?: run {
+            ws.sendMessage(context.from, "\u26A0\uFE0F Pelada *$code* nao encontrada.")
+            return
+        }
 
         ws.sendMessage(
             context.from,
@@ -454,8 +460,8 @@ class GerenciarCommand(
     }
 
     private fun editarCampo(context: CommandContext, ws: WhatsAppService) {
-        val code = context.args.getOrNull(1) ?: return
-        val field = context.args.getOrNull(2) ?: return
+        val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
+        val field = context.args.getOrNull(2) ?: return showEditar(context, ws)
         val value = context.args.drop(3).joinToString(" ")
 
         if (!authorizationService.isAdminOrOwner(context.from, code)) {
@@ -535,7 +541,7 @@ class GerenciarCommand(
     }
 
     private fun showCancelar(context: CommandContext, ws: WhatsAppService) {
-        val code = context.args.getOrNull(1) ?: return
+        val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
 
         if (!authorizationService.isOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Apenas o organizador pode cancelar.")
@@ -560,7 +566,7 @@ class GerenciarCommand(
     }
 
     private fun confirmarCancelamento(context: CommandContext, ws: WhatsAppService) {
-        val code = context.args.getOrNull(1) ?: return
+        val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
 
         if (!authorizationService.isOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Apenas o organizador pode cancelar.")
@@ -610,14 +616,17 @@ class GerenciarCommand(
     }
 
     private fun showConvidar(context: CommandContext, ws: WhatsAppService) {
-        val code = context.args.getOrNull(1) ?: return
+        val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
 
         if (!authorizationService.isAdminOrOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Sem permissao.")
             return
         }
 
-        val pelada = peladaService.findByCode(code) ?: return
+        val pelada = peladaService.findByCode(code) ?: run {
+            ws.sendMessage(context.from, "\u26A0\uFE0F Pelada *$code* nao encontrada.")
+            return
+        }
 
         val phoneNumber = whatsAppProperties.phoneNumber
         val deepLink = if (phoneNumber.isNotBlank()) {

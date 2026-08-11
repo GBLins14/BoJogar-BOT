@@ -156,17 +156,14 @@ class CriarCommand(
                     ws.sendMessage(context.from, "\u26A0\uFE0F Valor minimo para pelada paga e R$ 5,00. Digite 0 para gratis ou um valor a partir de 5.")
                     return
                 }
-                sessionManager.updateSession(context.from, "price", price.toString(), null)
                 if (price > BigDecimal.ZERO) {
-                    sessionManager.updateSession(
-                        context.from,
-                        session.withField("price", price.toString(), "pixKey")
-                    )
+                    sessionManager.updateSession(context.from, "price", price.toString(), "pixKey")
                     ws.sendMessage(
                         context.from,
                         "\uD83D\uDCF2 *Chave Pix (obrigatorio):*\n\nDigite a chave Pix para receber os pagamentos dos jogadores.\n\n_Os valores serao repassados automaticamente com taxa de 10% da plataforma._"
                     )
                 } else {
+                    sessionManager.updateSession(context.from, "price", price.toString(), null)
                     showSummary(context, ws)
                 }
             }

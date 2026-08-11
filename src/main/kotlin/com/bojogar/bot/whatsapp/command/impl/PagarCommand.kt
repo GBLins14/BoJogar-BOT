@@ -203,12 +203,12 @@ class PagarCommand(
         }
 
         // Generate PIX
-        doGeneratePix(context, ws, code, payment.participantId.toString(), cpf)
+        doGeneratePix(context, ws, code, cpf)
     }
 
     private fun handleCpfInput(context: CommandContext, ws: WhatsAppService) {
-        val code = context.args.getOrNull(1) ?: return
-        val rawCpf = context.args.getOrNull(2) ?: return
+        val code = context.args.getOrNull(1) ?: return showPendingPayments(context, ws)
+        val rawCpf = context.args.getOrNull(2) ?: return showPendingPayments(context, ws)
 
         val cpf = rawCpf.replace(Regex("[^0-9]"), "")
 
@@ -228,19 +228,18 @@ class PagarCommand(
             return
         }
 
-        doGeneratePix(context, ws, code, payment.participantId.toString(), cpf)
+        doGeneratePix(context, ws, code, cpf)
     }
 
     private fun doGeneratePix(
         context: CommandContext,
         ws: WhatsAppService,
         code: String,
-        participantId: String,
         cpf: String
     ) {
         val user = userService.findByPhone(context.from)
         if (user == null) {
-            ws.sendMessage(context.from, "\u274C Erro: usuario nao encontrado.")
+            ws.sendMessage(context.from, "\u274C Ocorreu um erro. Tente novamente mais tarde.")
             return
         }
 
@@ -287,7 +286,7 @@ class PagarCommand(
             }
             is PixGenerationResult.Error -> {
                 val pelada = peladaService.findByCode(code)
-                ws.sendMessage(context.from, "\u274C ${result.message}")
+                ws.sendMessage(context.from, "\u274C Erro ao gerar PIX. Tente novamente mais tarde.")
                 if (pelada != null && !pelada.chavePix.isNullOrBlank()) {
                     ws.sendMessage(
                         context.from,

@@ -3,8 +3,6 @@ package com.bojogar.bot.controller
 import com.bojogar.bot.config.SyncPayProperties
 import com.bojogar.bot.dto.syncpay.SyncPayWebhookPayload
 import com.bojogar.bot.service.PagamentoService
-import com.bojogar.bot.service.NotificationService
-import com.bojogar.bot.service.PeladaService
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -13,8 +11,6 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/v1/api/syncpay/webhook")
 class SyncPayWebhookController(
     private val pagamentoService: PagamentoService,
-    private val notificationService: NotificationService,
-    private val peladaService: PeladaService,
     private val syncPayProperties: SyncPayProperties
 ) {
 
@@ -47,37 +43,7 @@ class SyncPayWebhookController(
 
             if (data.status == "completed" && data.id != null) {
                 log.info("Processing completed payment - identifier: {}", data.id)
-
-                val pagamento = pagamentoService.confirmPaymentByWebhook(
-                    syncpayIdentifier = data.id,
-                    endToEnd = data.endToEnd
-                )
-
-                if (pagamento != null) {
-                    val participant = pagamento.participant
-                    val pelada = peladaService.findByCode(participant.pelada.codigo)
-
-                    if (pelada != null) {
-                        notificationService.notifyPaymentConfirmed(
-                            participantPhone = participant.user.phone,
-                            participantName = participant.displayName ?: participant.user.name,
-                            pelada = pelada
-                        )
-                        notificationService.notifyAdminPaymentReceived(
-                            peladaCode = pelada.codigo,
-                            participantName = participant.displayName ?: participant.user.name,
-                            amount = pagamento.valor
-                        )
-                    }
-
-                    // Transfer to admin (amount minus platform fee)
-                    pagamentoService.transferToAdmin(pagamento)
-
-                    log.info("Payment confirmed via webhook for participant {} in pelada {}",
-                        participant.user.phone, participant.pelada.codigo)
-                } else {
-                    log.warn("No matching pending payment found for identifier: {}", data.id)
-                }
+                pagamentoService.processWebhookPayment(data.id, data.endToEnd)
             } else {
                 log.info("Ignoring webhook - status: {}, id: {}", data.status, data.id)
             }

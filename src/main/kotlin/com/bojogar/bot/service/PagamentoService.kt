@@ -3,10 +3,10 @@ package com.bojogar.bot.service
 import com.bojogar.bot.config.SyncPayProperties
 import com.bojogar.bot.dto.response.PaymentResponse
 import com.bojogar.bot.dto.syncpay.SyncPayClientInfo
-import com.bojogar.bot.entity.Pagamento
 import com.bojogar.bot.enums.ParticipantStatus
 import com.bojogar.bot.enums.StatusPagamento
 import com.bojogar.bot.exception.BusinessException
+import com.bojogar.bot.mapper.ParticipantMapper
 import com.bojogar.bot.mapper.PaymentMapper
 import com.bojogar.bot.repository.PagamentoRepository
 import com.bojogar.bot.repository.PeladaParticipantRepository
@@ -31,8 +31,11 @@ class PagamentoService(
     private val participantRepository: PeladaParticipantRepository,
     private val peladaRepository: PeladaRepository,
     private val paymentMapper: PaymentMapper,
+    private val participantMapper: ParticipantMapper,
+    private val peladaMapper: com.bojogar.bot.mapper.PeladaMapper,
     private val syncPayClient: SyncPayClient,
-    private val syncPayProperties: SyncPayProperties
+    private val syncPayProperties: SyncPayProperties,
+    private val notificationService: NotificationService
 ) {
 
     companion object {
@@ -106,27 +109,84 @@ class PagamentoService(
             }
         } catch (e: Exception) {
             log.error("Failed to generate PIX for participant {}: {}", participantId, e.message, e)
-            PixGenerationResult.Error("Erro ao gerar PIX: ${e.message}")
+            PixGenerationResult.Error("Erro ao gerar PIX. Tente novamente.")
         }
     }
 
     @Transactional
-    fun confirmPaymentByWebhook(syncpayIdentifier: String, endToEnd: String?): Pagamento? {
+    fun processWebhookPayment(syncpayIdentifier: String, endToEnd: String?) {
         val payment = pagamentoRepository.findBySyncpayIdentifier(syncpayIdentifier)
-            ?: return null
+        if (payment == null) {
+            log.warn("No matching pending payment found for identifier: {}", syncpayIdentifier)
+            return
+        }
 
         // Idempotent: skip if already confirmed
         if (payment.status == StatusPagamento.CONFIRMADO) {
             log.info("Payment already confirmed for identifier: {}", syncpayIdentifier)
-            return payment
+            return
         }
 
         payment.status = StatusPagamento.CONFIRMADO
         payment.paidAt = Instant.now()
         payment.transactionId = endToEnd
+        pagamentoRepository.save(payment)
+
+        // Access lazy fields while session is still open
+        val participant = payment.participant
+        val pelada = participant.pelada
+        val participantPhone = participant.user.phone
+        val participantName = participant.displayName ?: participant.user.name
+        val peladaCode = pelada.codigo
+        val peladaEsporteLabel = pelada.esporte.label
+        val chavePix = pelada.chavePix
+        val amount = payment.valor
 
         log.info("Payment confirmed via webhook - identifier: {}, endToEnd: {}", syncpayIdentifier, endToEnd)
-        return pagamentoRepository.save(payment)
+
+        // Send notifications
+        val peladaResponse = peladaMapper.toResponse(pelada)
+
+        notificationService.notifyPaymentConfirmed(
+            participantPhone = participantPhone,
+            participantName = participantName,
+            pelada = peladaResponse
+        )
+        notificationService.notifyAdminPaymentReceived(
+            peladaCode = peladaCode,
+            participantName = participantName,
+            amount = amount
+        )
+
+        // Transfer to admin (amount minus platform fee)
+        if (!chavePix.isNullOrBlank()) {
+            val feePercent = BigDecimal(syncPayProperties.platformFeePercent)
+            val fee = amount.multiply(feePercent).divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
+            val transferAmount = amount.subtract(fee)
+
+            if (transferAmount > BigDecimal.ZERO) {
+                val pixKeyType = detectPixKeyType(chavePix)
+                try {
+                    val response = syncPayClient.cashOut(
+                        amount = transferAmount,
+                        pixKey = chavePix,
+                        pixKeyType = pixKeyType,
+                        description = "Repasse pelada $peladaCode - $peladaEsporteLabel"
+                    )
+                    log.info("Transfer initiated for pelada {} - amount: {} (fee: {}), identifier: {}",
+                        peladaCode, transferAmount, fee, response.identifier)
+                } catch (e: Exception) {
+                    log.error("Failed to transfer to admin for pelada {} - amount: {}: {}",
+                        peladaCode, transferAmount, e.message, e)
+                }
+            } else {
+                log.warn("Transfer amount is zero or negative after fee for pelada {} - skipping", peladaCode)
+            }
+        } else {
+            log.warn("No PIX key configured for pelada {} - skipping transfer", peladaCode)
+        }
+
+        log.info("Payment confirmed via webhook for participant {} in pelada {}", participantPhone, peladaCode)
     }
 
     @Transactional(readOnly = true)
@@ -140,7 +200,6 @@ class PagamentoService(
         val pelada = peladaRepository.findByCodigo(peladaCode.uppercase()) ?: return emptyList()
         val confirmed = participantRepository.findByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.CONFIRMED)
 
-        val participantMapper = com.bojogar.bot.mapper.ParticipantMapper()
         return confirmed.filter { participant ->
             val payments = pagamentoRepository.findByParticipantId(participant.id!!)
             payments.none { it.status == StatusPagamento.CONFIRMADO }
@@ -169,46 +228,6 @@ class PagamentoService(
             pagamentoRepository.findByParticipantId(participant.id!!)
                 .filter { it.status == StatusPagamento.PENDENTE }
                 .map { paymentMapper.toResponse(it) }
-        }
-    }
-
-    fun transferToAdmin(pagamento: Pagamento) {
-        val pelada = pagamento.participant.pelada
-        val chavePix = pelada.chavePix
-
-        if (chavePix.isNullOrBlank()) {
-            log.warn("No PIX key configured for pelada {} - skipping transfer", pelada.codigo)
-            return
-        }
-
-        val feePercent = BigDecimal(syncPayProperties.platformFeePercent)
-        val fee = pagamento.valor.multiply(feePercent).divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
-        val transferAmount = pagamento.valor.subtract(fee)
-
-        if (transferAmount <= BigDecimal.ZERO) {
-            log.warn("Transfer amount is zero or negative after fee for pelada {} - skipping", pelada.codigo)
-            return
-        }
-
-        val pixKeyType = detectPixKeyType(chavePix)
-
-        try {
-            val response = syncPayClient.cashOut(
-                amount = transferAmount,
-                pixKey = chavePix,
-                pixKeyType = pixKeyType,
-                description = "Repasse pelada ${pelada.codigo} - ${pelada.esporte.label}"
-            )
-
-            log.info(
-                "Transfer initiated for pelada {} - amount: {} (fee: {}), pixKey: {}..., identifier: {}",
-                pelada.codigo, transferAmount, fee, chavePix.take(6), response.identifier
-            )
-        } catch (e: Exception) {
-            log.error(
-                "Failed to transfer to admin for pelada {} - amount: {}, pixKey: {}: {}",
-                pelada.codigo, transferAmount, chavePix.take(6), e.message, e
-            )
         }
     }
 

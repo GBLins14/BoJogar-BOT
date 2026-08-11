@@ -167,7 +167,8 @@ class EntrarCommand(
                 ws.sendMessage(context.from, "\u274C Esta pelada nao esta aberta para inscricoes.")
             }
             is JoinResult.Error -> {
-                ws.sendMessage(context.from, "\u274C ${result.message}")
+                log.error("Error joining pelada {}: {}", code, result.message)
+                ws.sendMessage(context.from, "\u274C Ocorreu um erro. Tente novamente mais tarde.")
             }
         }
     }
