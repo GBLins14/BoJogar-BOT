@@ -61,6 +61,9 @@ class CriarCommand(
     }
 
     private fun handleSportSelected(context: CommandContext, ws: WhatsAppService, sport: String) {
+        if (sessionManager.getSession(context.from) == null) {
+            sessionManager.startCreatingPelada(context.from)
+        }
         sessionManager.updateSession(context.from, "esporte", sport, "descricao")
         ws.sendMessage(
             context.from,

@@ -120,7 +120,16 @@ class MessageHandler(
     private fun routeMessage(context: CommandContext, rawMessage: String) {
         // 1. Explicit command (starts with /)
         if (rawMessage.startsWith("/")) {
-            sessionManager.clear(context.from)
+            // Don't clear session for commands that are part of an active creation/editing flow
+            val session = sessionManager.getSession(context.from)
+            val isFlowCommand = session != null && session.state != ConversationState.IDLE && (
+                rawMessage.startsWith("/criar ") ||
+                rawMessage.startsWith("/gerenciar editar_campo ") ||
+                rawMessage.startsWith("/pagar cpf_input ")
+            )
+            if (!isFlowCommand) {
+                sessionManager.clear(context.from)
+            }
             if (!commandProcessor.process(context)) {
                 log.info("No command matched, falling back to /start for {}", context.from)
                 commandProcessor.process(context.copy(rawMessage = "/start"))
