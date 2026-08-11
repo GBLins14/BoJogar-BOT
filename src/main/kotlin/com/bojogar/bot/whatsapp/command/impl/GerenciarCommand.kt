@@ -628,28 +628,24 @@ class GerenciarCommand(
             return
         }
 
-        val phoneNumber = whatsAppProperties.phoneNumber
-        val deepLink = if (phoneNumber.isNotBlank()) {
-            "https://wa.me/$phoneNumber?text=$code"
-        } else {
-            null
-        }
+        val deepLink = "https://wa.me/5581983868651?text=$code"
 
         val shareMessage = buildString {
             append("Bora jogar! Entra na pelada comigo!\n\n")
             append("\uD83C\uDFC6 *${pelada.esporteLabel}*\n")
             append("\uD83D\uDCCD ${pelada.local}\n")
             append("\uD83D\uDCC5 ${pelada.dataHora.format(DATE_FMT)}\n")
-            append("\uD83D\uDC65 ${pelada.remainingSlots} vagas restantes\n")
+            if (pelada.limiteJogadores == 0) {
+                append("\uD83D\uDC65 Vagas ilimitadas\n")
+            } else {
+                append("\uD83D\uDC65 ${pelada.remainingSlots} vagas restantes\n")
+            }
             if (pelada.valorPorJogador > BigDecimal.ZERO) {
                 append("\uD83D\uDCB0 R$ ${pelada.valorPorJogador}\n")
             } else {
                 append("\uD83D\uDCB0 Gratis\n")
             }
-            if (deepLink != null) {
-                append("\nPara participar, clique no link:\n$deepLink\n")
-            }
-            append("\nOu envie o codigo *$code* para o bot BoJogar!")
+            append("\nPara participar, clique no link abaixo e envie a mensagem:\n$deepLink")
         }
 
         ws.sendMessage(
