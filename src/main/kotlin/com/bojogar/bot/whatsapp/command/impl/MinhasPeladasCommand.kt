@@ -115,7 +115,7 @@ class MinhasPeladasCommand(
         if (pendingPayment.isNotEmpty()) {
             sections.add(
                 ListSection(
-                    title = "\u23F3 Aguardando Pagamento (${pendingPayment.size})",
+                    title = "\u23F3 Pendentes (${pendingPayment.size})",
                     rows = pendingPayment.take(10).mapNotNull { p ->
                         val pel = peladaMap[p.peladaCodigo] ?: return@mapNotNull null
                         ListRow(

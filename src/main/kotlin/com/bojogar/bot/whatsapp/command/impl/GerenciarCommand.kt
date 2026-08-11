@@ -217,7 +217,7 @@ class GerenciarCommand(
         if (pendingPayment.isNotEmpty()) {
             sections.add(
                 ListSection(
-                    title = "\u23F3 Aguardando Pagamento (${pendingPayment.size})",
+                    title = "\u23F3 Pendentes (${pendingPayment.size})",
                     rows = pendingPayment.take(10).map { p ->
                         val roleLabel = if (p.role != "PLAYER") " [${p.role}]" else ""
                         ListRow(
@@ -425,7 +425,7 @@ class GerenciarCommand(
                         )
                     ),
                     ListSection(
-                        title = "Confirmar Pagamento Manual",
+                        title = "Confirmar Pagamento",
                         rows = unpaid.take(9).map { p ->
                             ListRow(
                                 id = "/gerenciar confirmar_pgto $code ${p.userPhone}",
