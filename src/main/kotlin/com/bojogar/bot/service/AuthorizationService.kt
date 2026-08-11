@@ -8,8 +8,10 @@ import com.bojogar.bot.mapper.ParticipantMapper
 import com.bojogar.bot.repository.PeladaParticipantRepository
 import com.bojogar.bot.util.PhoneUtils
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 
 @Service
+@Transactional(readOnly = true)
 class AuthorizationService(
     private val participantRepository: PeladaParticipantRepository,
     private val participantMapper: ParticipantMapper
