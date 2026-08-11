@@ -72,8 +72,14 @@ class ParticipantService(
             ?: return JoinResult.Error("Usuario nao encontrado")
 
         val existing = participantRepository.findByPeladaIdAndUserId(pelada.id!!, user.id!!)
-        if (existing != null && existing.status in listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.PENDING_PAYMENT, ParticipantStatus.WAITLIST)) {
+        if (existing != null && existing.status in listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST)) {
             return JoinResult.AlreadyJoined
+        }
+        if (existing != null && existing.status == ParticipantStatus.PENDING_PAYMENT) {
+            return JoinResult.PendingPayment(
+                participantMapper.toResponse(existing),
+                peladaMapper.toResponse(pelada)
+            )
         }
 
         val isPaid = pelada.valorPorJogador > BigDecimal.ZERO
