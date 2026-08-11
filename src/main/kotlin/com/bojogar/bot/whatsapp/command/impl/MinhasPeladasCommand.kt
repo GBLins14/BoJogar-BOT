@@ -233,7 +233,7 @@ class MinhasPeladasCommand(
                     buildString {
                         append("\u274C *Inscricao Cancelada*\n\n")
                         append("Sua inscricao na pelada *$codigo* foi cancelada com sucesso.\n")
-                        append("Caso tenha direito a reembolso, o organizador entrara em contato.")
+                        append("Caso tenha direito a reembolso, entre em contato com o organizador.")
                     }
                 )
                 if (result.promoted != null) {

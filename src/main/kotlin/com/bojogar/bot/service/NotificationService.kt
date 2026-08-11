@@ -68,7 +68,7 @@ class NotificationService(
             append("A pelada *${pelada.codigo}* — ${pelada.esporteLabel} foi cancelada pelo organizador.\n")
             append("\uD83D\uDCCD ${pelada.local}\n")
             append("\uD83D\uDCC5 ${pelada.dataHora}\n\n")
-            append("Caso tenha direito a reembolso, o organizador entrara em contato.")
+            append("Caso tenha direito a reembolso, entre em contato com o organizador.")
         }
 
         participants
