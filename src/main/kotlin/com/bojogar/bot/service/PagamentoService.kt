@@ -176,34 +176,6 @@ class PagamentoService(
             amount = amount
         )
 
-        // Transfer to admin (amount minus platform fee)
-        if (!chavePix.isNullOrBlank()) {
-            val feePercent = BigDecimal(syncPayProperties.platformFeePercent)
-            val fee = amount.multiply(feePercent).divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
-            val transferAmount = amount.subtract(fee)
-
-            if (transferAmount > BigDecimal.ZERO) {
-                val pixKeyType = detectPixKeyType(chavePix)
-                try {
-                    val response = syncPayClient.cashOut(
-                        amount = transferAmount,
-                        pixKey = chavePix,
-                        pixKeyType = pixKeyType,
-                        description = "Repasse pelada $peladaCode - $peladaEsporteLabel"
-                    )
-                    log.info("Transfer initiated for pelada {} - amount: {} (fee: {}), identifier: {}",
-                        peladaCode, transferAmount, fee, response.identifier)
-                } catch (e: Exception) {
-                    log.error("Failed to transfer to admin for pelada {} - amount: {}: {}",
-                        peladaCode, transferAmount, e.message, e)
-                }
-            } else {
-                log.warn("Transfer amount is zero or negative after fee for pelada {} - skipping", peladaCode)
-            }
-        } else {
-            log.warn("No PIX key configured for pelada {} - skipping transfer", peladaCode)
-        }
-
         log.info("Payment confirmed via webhook for participant {} in pelada {}", participantPhone, peladaCode)
     }
 
@@ -257,14 +229,32 @@ class PagamentoService(
         }
     }
 
-    private fun detectPixKeyType(pixKey: String): String {
-        val cleaned = pixKey.replace(Regex("[^a-zA-Z0-9@.+-]"), "")
-        return when {
-            cleaned.matches(Regex("^\\d{11}$")) -> "cpf"
-            cleaned.matches(Regex("^\\d{14}$")) -> "cnpj"
-            cleaned.contains("@") -> "email"
-            cleaned.matches(Regex("^\\+?\\d{10,13}$")) -> "phone"
-            else -> "random"
+    @Transactional(readOnly = true)
+    fun getWalletBalance(peladaCode: String): BigDecimal {
+        val payments = pagamentoRepository.findByParticipantPeladaCodigo(peladaCode.uppercase())
+        val totalCollected = payments
+            .filter { it.status == StatusPagamento.CONFIRMADO }
+            .sumOf { it.valor }
+
+        if (totalCollected <= BigDecimal.ZERO) return BigDecimal.ZERO
+
+        val platformFee = totalCollected
+            .multiply(BigDecimal(syncPayProperties.platformFeePercent))
+            .divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
+
+        return totalCollected.subtract(platformFee).max(BigDecimal.ZERO)
+    }
+
+    @Transactional(readOnly = true)
+    fun getOrganizerWalletBalance(phone: String): BigDecimal {
+        val normalized = PhoneUtils.normalizePhone(phone)
+        val managed = participantRepository.findByUserPhoneAndStatusIn(
+            normalized,
+            listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.PENDING_PAYMENT, ParticipantStatus.WAITLIST)
+        ).filter { it.role.hasAuthority(com.bojogar.bot.enums.ParticipantRole.ADMIN) }
+
+        return managed.sumOf { participant ->
+            getWalletBalance(participant.pelada.codigo)
         }
     }
 }

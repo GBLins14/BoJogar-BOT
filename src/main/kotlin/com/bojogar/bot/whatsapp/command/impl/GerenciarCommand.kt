@@ -54,6 +54,7 @@ class GerenciarCommand(
             "cancelar" -> showCancelar(context, whatsappService)
             "cancelar_sim" -> confirmarCancelamento(context, whatsappService)
             "convidar" -> showConvidar(context, whatsappService)
+            "saque" -> solicitarSaque(context, whatsappService)
             else -> showManagedPeladas(context, whatsappService)
         }
     }
@@ -374,6 +375,7 @@ class GerenciarCommand(
         val paid = payments.count { it.status == "CONFIRMADO" }
         val pending = payments.count { it.status == "PENDENTE" }
         val totalCollected = payments.filter { it.status == "CONFIRMADO" }.sumOf { it.valor }
+        val walletBalance = pagamentoService.getWalletBalance(code)
 
         ws.sendMessage(
             context.from,
@@ -381,7 +383,9 @@ class GerenciarCommand(
                 append("\uD83D\uDCB0 *Financeiro — $code*\n\n")
                 append("\u2705 *Pagos:* $paid\n")
                 append("\u23F3 *Pendentes:* $pending\n")
-                append("\uD83D\uDCB5 *Total:* R$ $totalCollected\n\n")
+                append("\uD83D\uDCB5 *Total Arrecadado:* R$ $totalCollected\n")
+                append("\uD83D\uDCB3 *Saldo Disponivel:* R$ $walletBalance\n")
+                append("_(ja descontadas as taxas)_\n\n")
 
                 if (payments.isNotEmpty()) {
                     payments.forEach { p ->
@@ -396,13 +400,23 @@ class GerenciarCommand(
         if (unpaid.isNotEmpty()) {
             ws.sendList(
                 to = context.from,
-                header = "Confirmar Pagamentos",
-                body = "\u23F3 Selecione para confirmar pagamento:",
-                buttonLabel = "Ver Pendentes",
+                header = "Acoes Financeiras",
+                body = "Selecione uma opcao:",
+                buttonLabel = "Ver Opcoes",
                 sections = listOf(
                     ListSection(
+                        title = "Saque",
+                        rows = listOf(
+                            ListRow(
+                                id = "/gerenciar saque $code",
+                                title = "Solicitar Saque",
+                                description = "Saldo: R$ $walletBalance"
+                            )
+                        )
+                    ),
+                    ListSection(
                         title = "Pagamento Pendente",
-                        rows = unpaid.take(10).map { p ->
+                        rows = unpaid.take(9).map { p ->
                             ListRow(
                                 id = "/gerenciar confirmar_pgto $code ${p.userPhone}",
                                 title = p.displayName ?: p.userName,
@@ -416,8 +430,11 @@ class GerenciarCommand(
         } else {
             ws.sendButtons(
                 to = context.from,
-                body = "Voltar:",
-                buttons = listOf(Button(id = "/gerenciar pelada $code", title = "Menu Admin"))
+                body = "O que deseja fazer?",
+                buttons = listOf(
+                    Button(id = "/gerenciar saque $code", title = "Solicitar Saque"),
+                    Button(id = "/gerenciar pelada $code", title = "Menu Admin")
+                )
             )
         }
     }
@@ -605,6 +622,51 @@ class GerenciarCommand(
             buttons = listOf(
                 Button(id = "/criar", title = "Criar Pelada"),
                 Button(id = "/start", title = "Menu Inicial")
+            )
+        )
+    }
+
+    private fun solicitarSaque(context: CommandContext, ws: WhatsAppService) {
+        val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
+
+        if (!authorizationService.isAdminOrOwner(context.from, code)) {
+            ws.sendMessage(context.from, "\u274C Sem permissao.")
+            return
+        }
+
+        val walletBalance = pagamentoService.getWalletBalance(code)
+
+        if (walletBalance <= BigDecimal.ZERO) {
+            ws.sendMessage(context.from, "\u26A0\uFE0F Voce nao tem saldo disponivel para saque nesta pelada.")
+            ws.sendButtons(
+                to = context.from,
+                body = "Voltar:",
+                buttons = listOf(Button(id = "/gerenciar financeiro $code", title = "Ver Financeiro"))
+            )
+            return
+        }
+
+        val organizerPhone = context.from.replace(Regex("[^0-9]"), "")
+        val saqueMessage = "Solicito o saque da minha conta. ID: $organizerPhone Valor: $walletBalance"
+        val deepLink = "https://wa.me/5581999536361?text=${java.net.URLEncoder.encode(saqueMessage, "UTF-8")}"
+
+        ws.sendMessage(
+            context.from,
+            buildString {
+                append("\uD83D\uDCB3 *Solicitar Saque — $code*\n\n")
+                append("\uD83D\uDCB0 *Saldo Disponivel:* R$ $walletBalance\n")
+                append("_(ja descontadas as taxas da plataforma e gateway)_\n\n")
+                append("Clique no link abaixo para solicitar o saque:\n")
+                append(deepLink)
+            }
+        )
+
+        ws.sendButtons(
+            to = context.from,
+            body = "Voltar:",
+            buttons = listOf(
+                Button(id = "/gerenciar financeiro $code", title = "Ver Financeiro"),
+                Button(id = "/gerenciar pelada $code", title = "Menu Admin")
             )
         )
     }

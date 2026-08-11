@@ -51,32 +51,6 @@ class SyncPayClient(
         return response
     }
 
-    fun cashOut(amount: BigDecimal, pixKey: String, pixKeyType: String, description: String?): SyncPayCashOutResponse {
-        val token = getValidToken()
-
-        val request = SyncPayCashOutRequest(
-            amount = amount.toDouble(),
-            pixKey = pixKey,
-            pixKeyType = pixKeyType,
-            description = description,
-            webhookUrl = properties.webhookUrl
-        )
-
-        log.info("Initiating cashout - amount: {}, pixKey: {}..., type: {}", amount, pixKey.take(6), pixKeyType)
-
-        val response = restClient.post()
-            .uri("/api/partner/v1/cashout")
-            .header("Authorization", "Bearer $token")
-            .header("Accept", "application/json")
-            .body(request)
-            .retrieve()
-            .body(SyncPayCashOutResponse::class.java)
-            ?: throw RuntimeException("Empty response from SyncPay cash-out")
-
-        log.info("Cashout initiated - identifier: {}, status: {}", response.identifier, response.status)
-        return response
-    }
-
     fun getTransactionStatus(identifier: String): SyncPayTransactionResponse {
         val token = getValidToken()
 
