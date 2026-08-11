@@ -42,11 +42,11 @@ class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException::class)
     fun handleMessageNotReadable(ex: HttpMessageNotReadableException): ResponseEntity<ErrorResponse> {
-        log.error(">>> ERRO deserializacao JSON: {}", ex.message, ex)
+        log.error(">>> ERRO deserialização JSON: {}", ex.message, ex)
         val error = ErrorResponse(
             status = 400,
             error = "Bad Request",
-            message = "JSON invalido ou mal formatado"
+            message = "JSON inválido ou mal formatado"
         )
         return ResponseEntity.badRequest().body(error)
     }

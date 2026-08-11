@@ -31,7 +31,7 @@ class WhatsAppClient(
 
             log.info("Message sent — response: {}", response)
         } catch (e: HttpClientErrorException.Unauthorized) {
-            log.error("Token invalido: {}", e.responseBodyAsString)
+            log.error("Token inválido: {}", e.responseBodyAsString)
         } catch (e: HttpClientErrorException.TooManyRequests) {
             log.error("Rate limit: {}", e.responseBodyAsString)
         } catch (e: HttpClientErrorException) {

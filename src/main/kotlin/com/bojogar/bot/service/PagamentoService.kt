@@ -46,7 +46,7 @@ class PagamentoService(
     fun confirmPayment(participantId: UUID, requesterPhone: String): PaymentResponse {
         val payments = pagamentoRepository.findByParticipantId(participantId)
         val payment = payments.firstOrNull { it.status == StatusPagamento.PENDENTE }
-            ?: throw BusinessException("Pagamento pendente nao encontrado")
+            ?: throw BusinessException("Pagamento pendente não encontrado")
 
         val requesterNormalized = PhoneUtils.normalizePhone(requesterPhone)
         val participant = payment.participant
@@ -54,7 +54,7 @@ class PagamentoService(
 
         val requesterParticipant = participantRepository.findByUserPhoneAndPeladaCodigo(requesterNormalized, pelada.codigo)
         if (requesterParticipant == null || !requesterParticipant.role.hasAuthority(com.bojogar.bot.enums.ParticipantRole.ADMIN)) {
-            throw BusinessException("Sem permissao para confirmar pagamento")
+            throw BusinessException("Sem permissão para confirmar pagamento")
         }
 
         payment.status = StatusPagamento.CONFIRMADO
@@ -82,7 +82,7 @@ class PagamentoService(
     ): PixGenerationResult {
         val payments = pagamentoRepository.findByParticipantId(participantId)
         val payment = payments.firstOrNull { it.status == StatusPagamento.PENDENTE }
-            ?: return PixGenerationResult.Error("Pagamento pendente nao encontrado")
+            ?: return PixGenerationResult.Error("Pagamento pendente não encontrado")
 
         // If PIX already generated, return existing code
         if (payment.pixCode != null && payment.syncpayIdentifier != null) {

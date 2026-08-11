@@ -35,10 +35,10 @@ class PeladaService(
     fun create(phone: String, request: CreatePeladaRequest): PeladaResponse {
         val normalized = PhoneUtils.normalizePhone(phone)
         val user = userRepository.findByPhone(normalized)
-            ?: throw BusinessException("Usuario nao encontrado")
+            ?: throw BusinessException("Usuário não encontrado")
 
         val sport = runCatching { Esporte.valueOf(request.esporte.uppercase()) }.getOrElse {
-            throw BusinessException("Esporte invalido: ${request.esporte}")
+            throw BusinessException("Esporte inválido: ${request.esporte}")
         }
 
         val code = generateUniqueCode()
@@ -97,13 +97,13 @@ class PeladaService(
     @Transactional
     fun update(code: String, requesterPhone: String, request: UpdatePeladaRequest): PeladaResponse {
         val pelada = peladaRepository.findByCodigo(code.uppercase())
-            ?: throw BusinessException("Pelada nao encontrada: $code")
+            ?: throw BusinessException("Pelada não encontrada: $code")
 
         request.descricao?.let { pelada.descricao = it }
         request.dataHora?.let { pelada.dataHora = it }
         request.local?.let { pelada.local = it }
         request.limiteJogadores?.let {
-            if (it != 0 && it < 2) throw BusinessException("Minimo 2 jogadores (ou 0 para sem limite)")
+            if (it != 0 && it < 2) throw BusinessException("Mínimo de 2 jogadores (ou 0 para sem limite)")
             pelada.limiteJogadores = it
         }
         request.valorPorJogador?.let { pelada.valorPorJogador = it }
@@ -116,10 +116,10 @@ class PeladaService(
     @Transactional
     fun cancel(code: String, requesterPhone: String): PeladaResponse {
         val pelada = peladaRepository.findByCodigo(code.uppercase())
-            ?: throw BusinessException("Pelada nao encontrada: $code")
+            ?: throw BusinessException("Pelada não encontrada: $code")
 
         if (!pelada.status.canTransitionTo(StatusPelada.CANCELLED)) {
-            throw BusinessException("Pelada nao pode ser cancelada no status ${pelada.status}")
+            throw BusinessException("Pelada não pode ser cancelada no status ${pelada.status}")
         }
 
         val participants = participantRepository.findByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.CONFIRMED) +
@@ -141,6 +141,6 @@ class PeladaService(
             val code = CodeGenerator.generatePeladaCode()
             if (peladaRepository.findByCodigo(code) == null) return code
         }
-        throw BusinessException("Falha ao gerar codigo unico")
+        throw BusinessException("Falha ao gerar código único")
     }
 }

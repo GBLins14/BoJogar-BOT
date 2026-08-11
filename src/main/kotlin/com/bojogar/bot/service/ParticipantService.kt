@@ -62,14 +62,14 @@ class ParticipantService(
     fun join(phone: String, peladaCode: String): JoinResult {
         val normalized = PhoneUtils.normalizePhone(phone)
         val pelada = peladaRepository.findByCodigo(peladaCode.uppercase())
-            ?: return JoinResult.Error("Pelada nao encontrada: $peladaCode")
+            ?: return JoinResult.Error("Pelada não encontrada: $peladaCode")
 
         if (pelada.status !in listOf(StatusPelada.OPEN, StatusPelada.FULL)) {
             return JoinResult.PeladaClosed
         }
 
         val user = userRepository.findByPhone(normalized)
-            ?: return JoinResult.Error("Usuario nao encontrado")
+            ?: return JoinResult.Error("Usuário não encontrado")
 
         val existing = participantRepository.findByPeladaIdAndUserId(pelada.id!!, user.id!!)
         if (existing != null && existing.status in listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST)) {
@@ -153,7 +153,7 @@ class ParticipantService(
             ?: return LeaveResult.NotFound
 
         if (participant.role == ParticipantRole.OWNER) {
-            return LeaveResult.Error("O organizador nao pode sair da pelada. Use /gerenciar cancelar para cancelar.")
+            return LeaveResult.Error("O organizador não pode sair da pelada. Use /gerenciar cancelar para cancelar.")
         }
 
         if (participant.status !in listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.PENDING_PAYMENT, ParticipantStatus.WAITLIST)) {

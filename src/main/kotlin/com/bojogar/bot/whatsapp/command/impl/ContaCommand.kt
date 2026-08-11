@@ -69,7 +69,7 @@ class ContaCommand(
                 append("\uD83D\uDC64 *Minha Conta*\n\n")
                 append("\uD83D\uDCDD *Nome:* ${user?.name ?: context.senderName}\n")
                 append("\uD83D\uDCF1 *Telefone:* ${PhoneUtils.formatPhoneDisplay(context.from)}\n")
-                append("\uD83C\uDFD0 *Peladas ativas:* $active\n")
+                append("\uD83C\uDFC6 *Peladas ativas:* $active\n")
                 append("\uD83D\uDCCA *Total participadas:* $total")
             }
         )
@@ -97,12 +97,12 @@ class ContaCommand(
         }
 
         if (upcoming.isEmpty()) {
-            ws.sendMessage(context.from, "\uD83C\uDFD0 Voce nao esta inscrito em nenhuma pelada ativa.")
+            ws.sendMessage(context.from, "\uD83C\uDFC6 Você não está inscrito em nenhuma pelada ativa.")
             ws.sendButtons(
                 to = context.from,
                 body = "O que deseja fazer?",
                 buttons = listOf(
-                    Button(id = "/entrar", title = "Entrar com Codigo"),
+                    Button(id = "/entrar", title = "Entrar com Código"),
                     Button(id = "/start", title = "Menu Inicial")
                 )
             )
@@ -112,7 +112,7 @@ class ContaCommand(
         ws.sendList(
             to = context.from,
             header = "Minhas Peladas",
-            body = "\uD83C\uDFD0 Peladas que voce esta participando:",
+            body = "\uD83C\uDFC6 Peladas em que você está participando:",
             buttonLabel = "Ver Peladas",
             sections = listOf(
                 ListSection(
@@ -121,8 +121,8 @@ class ContaCommand(
                         val pel = peladaMap[p.peladaCodigo] ?: return@mapNotNull null
                         ListRow(
                             id = "/minhas ver ${p.peladaCodigo}",
-                            title = "${pel.esporteLabel} - ${pel.local.take(20)}",
-                            description = "${pel.dataHora.format(DATE_FMT_SHORT)} | ${p.status}"
+                            title = "${pel.esporteLabel} — ${pel.local.take(20)}",
+                            description = "${pel.dataHora.format(DATE_FMT_SHORT)} · ${p.status}"
                         )
                     }
                 )
@@ -138,10 +138,10 @@ class ContaCommand(
             to = context.from,
             header = "Resetar Conta",
             body = buildString {
-                append("\u26A0\uFE0F *Atencao!* Esta acao ira:\n\n")
-                append("\u274C Cancelar todas as suas inscricoes ($active ativas)\n")
+                append("\u26A0\uFE0F *Atenção!* Esta ação irá:\n\n")
+                append("\u274C Cancelar todas as suas inscrições ($active ativas)\n")
                 append("\u274C Sair de todas as peladas\n\n")
-                append("*Essa acao nao pode ser desfeita.*")
+                append("_Esta ação não pode ser desfeita._")
             },
             buttons = listOf(
                 Button(id = "/conta resetar_confirmar", title = "Sim, Resetar"),
@@ -163,8 +163,8 @@ class ContaCommand(
             context.from,
             buildString {
                 append("\u2705 *Conta Resetada*\n\n")
-                append("$cancelled inscricao(oes) cancelada(s).\n\n")
-                append("Voce pode comecar de novo a qualquer momento!")
+                append("$cancelled inscrição(ões) cancelada(s).\n\n")
+                append("Você pode começar de novo a qualquer momento!")
             }
         )
 
@@ -172,7 +172,7 @@ class ContaCommand(
             to = context.from,
             body = "O que deseja fazer?",
             buttons = listOf(
-                Button(id = "/entrar", title = "Entrar com Codigo"),
+                Button(id = "/entrar", title = "Entrar com Código"),
                 Button(id = "/start", title = "Menu Inicial")
             )
         )

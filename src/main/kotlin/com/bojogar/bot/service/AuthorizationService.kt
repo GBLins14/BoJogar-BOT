@@ -20,14 +20,14 @@ class AuthorizationService(
     fun requireRole(phone: String, peladaCode: String, minRole: ParticipantRole): ParticipantResponse {
         val normalized = PhoneUtils.normalizePhone(phone)
         val participant = participantRepository.findByUserPhoneAndPeladaCodigo(normalized, peladaCode.uppercase())
-            ?: throw BusinessException("Voce nao participa desta pelada")
+            ?: throw BusinessException("Você não participa desta pelada")
 
         if (participant.status !in listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST)) {
-            throw BusinessException("Voce nao participa desta pelada")
+            throw BusinessException("Você não participa desta pelada")
         }
 
         if (!participant.role.hasAuthority(minRole)) {
-            throw BusinessException("Sem permissao para esta acao")
+            throw BusinessException("Sem permissão para esta ação")
         }
 
         return participantMapper.toResponse(participant)

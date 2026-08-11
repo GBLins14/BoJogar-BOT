@@ -28,7 +28,7 @@ class PeladaController(
     @GetMapping("/{code}")
     fun findByCode(@PathVariable code: String): PeladaResponse {
         return peladaService.findByCode(code)
-            ?: throw ResourceNotFoundException("Pelada nao encontrada: $code")
+            ?: throw ResourceNotFoundException("Pelada não encontrada: $code")
     }
 
     @GetMapping("/user")

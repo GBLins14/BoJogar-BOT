@@ -30,8 +30,8 @@ class ParticipantController(
             is JoinResult.Confirmed -> ResponseEntity.status(HttpStatus.CREATED).body(result.participant)
             is JoinResult.PendingPayment -> ResponseEntity.status(HttpStatus.CREATED).body(mapOf("status" to "PENDING_PAYMENT", "participant" to result.participant))
             is JoinResult.Waitlisted -> ResponseEntity.ok(mapOf("status" to "WAITLIST", "position" to result.position))
-            is JoinResult.AlreadyJoined -> throw BusinessException("Ja inscrito nesta pelada")
-            is JoinResult.PeladaClosed -> throw BusinessException("Pelada nao esta aberta")
+            is JoinResult.AlreadyJoined -> throw BusinessException("Já inscrito nesta pelada")
+            is JoinResult.PeladaClosed -> throw BusinessException("Pelada não está aberta")
             is JoinResult.Error -> throw BusinessException(result.message)
         }
     }
@@ -43,7 +43,7 @@ class ParticipantController(
     ): ResponseEntity<Any> {
         return when (val result = participantService.leave(phone, code)) {
             is LeaveResult.Left -> ResponseEntity.ok(mapOf("status" to "LEFT", "promoted" to result.promoted))
-            is LeaveResult.NotFound -> throw BusinessException("Inscricao nao encontrada")
+            is LeaveResult.NotFound -> throw BusinessException("Inscrição não encontrada")
             is LeaveResult.Error -> throw BusinessException(result.message)
         }
     }
@@ -56,8 +56,8 @@ class ParticipantController(
     ): ResponseEntity<Any> {
         return when (val result = participantService.removeParticipant(requesterPhone, targetPhone, code)) {
             is RemoveResult.Removed -> ResponseEntity.ok(mapOf("status" to "REMOVED", "promoted" to result.promoted))
-            is RemoveResult.NotFound -> throw BusinessException("Participante nao encontrado")
-            is RemoveResult.Unauthorized -> throw BusinessException("Sem permissao")
+            is RemoveResult.NotFound -> throw BusinessException("Participante não encontrado")
+            is RemoveResult.Unauthorized -> throw BusinessException("Sem permissão")
             is RemoveResult.Error -> throw BusinessException(result.message)
         }
     }

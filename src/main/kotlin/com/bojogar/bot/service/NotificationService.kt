@@ -48,10 +48,10 @@ class NotificationService(
     fun notifyWaitlistPromotion(promoted: ParticipantResponse, pelada: PeladaResponse) {
         val message = buildString {
             append("\uD83C\uDF89 *Vaga Liberada!*\n\n")
-            append("Uma vaga abriu na pelada *${pelada.codigo}* — ${pelada.esporteLabel}!\n")
+            append("Uma vaga abriu na pelada *${pelada.codigo}* — ${pelada.esporteLabel}!\n\n")
             append("\uD83D\uDCCD ${pelada.local}\n")
             append("\uD83D\uDCC5 ${pelada.dataHora}\n\n")
-            append("Voce foi *automaticamente confirmado*!")
+            append("Você foi *automaticamente confirmado*!")
             if (pelada.valorPorJogador > BigDecimal.ZERO) {
                 append("\n\n\uD83D\uDCB0 *Valor:* R$ ${pelada.valorPorJogador}")
                 append("\n\nEnvie */pagar* para gerar o PIX e efetuar o pagamento.")
@@ -65,7 +65,7 @@ class NotificationService(
     fun notifyPeladaCancelled(pelada: PeladaResponse, participants: List<ParticipantResponse>) {
         val message = buildString {
             append("\u274C *Pelada Cancelada*\n\n")
-            append("A pelada *${pelada.codigo}* — ${pelada.esporteLabel} foi cancelada pelo organizador.\n")
+            append("A pelada *${pelada.codigo}* — ${pelada.esporteLabel} foi cancelada pelo organizador.\n\n")
             append("\uD83D\uDCCD ${pelada.local}\n")
             append("\uD83D\uDCC5 ${pelada.dataHora}\n\n")
             append("Caso tenha direito a reembolso, entre em contato com o organizador.")
@@ -82,8 +82,8 @@ class NotificationService(
     fun notifyParticipantRemoved(removed: ParticipantResponse, pelada: PeladaResponse) {
         val message = buildString {
             append("\u26A0\uFE0F *Removido da Pelada*\n\n")
-            append("Voce foi removido da pelada *${pelada.codigo}* — ${pelada.esporteLabel} pelo organizador.\n")
-            append("Caso tenha duvidas, entre em contato com o organizador.")
+            append("Você foi removido da pelada *${pelada.codigo}* — ${pelada.esporteLabel} pelo organizador.\n\n")
+            append("Caso tenha dúvidas, entre em contato com o organizador.")
         }
 
         notifyUser(removed.userPhone, message)
@@ -98,7 +98,7 @@ class NotificationService(
             append("\uD83C\uDFC6 ${pelada.esporteLabel}\n")
             append("\uD83D\uDCCD ${pelada.local}\n")
             append("\uD83D\uDCC5 ${pelada.dataHora.format(dateFmt)}\n\n")
-            append("Sua vaga esta garantida! Te vejo la, $participantName!")
+            append("Sua vaga está garantida! Te vemos lá, $participantName! \uD83D\uDCAA")
         }
 
         notifyUser(participantPhone, message)

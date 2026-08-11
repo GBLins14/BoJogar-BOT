@@ -14,7 +14,7 @@ class UserController(
     @GetMapping("/me")
     fun getMe(@RequestHeader("X-User-Phone") phone: String): UserResponse {
         return userService.findByPhone(phone)
-            ?: throw ResourceNotFoundException("Usuario nao encontrado")
+            ?: throw ResourceNotFoundException("Usuário não encontrado")
     }
 
     @PatchMapping("/me/name")
@@ -22,7 +22,7 @@ class UserController(
         @RequestHeader("X-User-Phone") phone: String,
         @RequestBody body: Map<String, String>
     ): UserResponse {
-        val name = body["name"] ?: throw IllegalArgumentException("Nome obrigatorio")
+        val name = body["name"] ?: throw IllegalArgumentException("Nome obrigatório")
         return userService.updateName(phone, name)
     }
 }

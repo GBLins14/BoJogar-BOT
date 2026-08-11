@@ -30,6 +30,8 @@ class CriarCommand(
         private val log = LoggerFactory.getLogger(CriarCommand::class.java)
         private val DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM HH:mm")
         private val DATE_FORMATTER_FULL = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
+        private val MIN_PRICE = BigDecimal(10)
+        private val MAX_PRICE = BigDecimal(100)
     }
 
     override fun execute(context: CommandContext, whatsappService: WhatsAppService) {
@@ -55,10 +57,10 @@ class CriarCommand(
     private fun selectSport(context: CommandContext, ws: WhatsAppService) {
         ws.sendButtons(
             to = context.from,
-            header = "Criar Pelada",
-            body = "\uD83C\uDFD0 Qual o esporte?",
+            header = "\u2795 Nova Pelada",
+            body = "Qual o esporte da pelada?",
             buttons = Esporte.entries.map { Button(id = "/criar ${it.name}", title = it.label) },
-            footer = "BoJogar"
+            footer = "Passo 1 de 6"
         )
     }
 
@@ -69,7 +71,7 @@ class CriarCommand(
         sessionManager.updateSession(context.from, "esporte", sport, "descricao")
         ws.sendMessage(
             context.from,
-            "\uD83D\uDCDD *Descricao da pelada:*\n\nDigite uma breve descricao (ex: Pelada de quarta na praia)"
+            "\uD83D\uDCDD *Descrição da pelada*\n\nDigite uma breve descrição.\n_Ex: Pelada de quarta na praia_"
         )
     }
 
@@ -85,14 +87,14 @@ class CriarCommand(
                 sessionManager.updateSession(context.from, "descricao", value, "local")
                 ws.sendMessage(
                     context.from,
-                    "\uD83D\uDCCD *Local:*\n\nDigite o local da pelada (ex: Quadra Arena Beach - Boa Viagem)"
+                    "\uD83D\uDCCD *Local da pelada*\n\nDigite o endereço ou nome do local.\n_Ex: Quadra Arena Beach — Boa Viagem_"
                 )
             }
             "local" -> {
                 sessionManager.updateSession(context.from, "local", value, "dataHora")
                 ws.sendMessage(
                     context.from,
-                    "\uD83D\uDCC5 *Data e Horario:*\n\nDigite no formato DD/MM HH:MM (ex: 15/08 19:00)"
+                    "\uD83D\uDCC5 *Data e horário*\n\nDigite no formato *DD/MM HH:MM*\n_Ex: 15/08 19:00_"
                 )
             }
             "dataHora" -> {
@@ -100,25 +102,25 @@ class CriarCommand(
                 if (dateTime == null) {
                     ws.sendMessage(
                         context.from,
-                        "\u26A0\uFE0F Formato invalido. Use DD/MM HH:MM (ex: 15/08 19:00)"
+                        "\u26A0\uFE0F Formato inválido. Use *DD/MM HH:MM*\n_Ex: 15/08 19:00_"
                     )
                     return
                 }
                 if (dateTime.isBefore(LocalDateTime.now())) {
                     ws.sendMessage(
                         context.from,
-                        "\u26A0\uFE0F A data deve ser no futuro. Tente novamente."
+                        "\u26A0\uFE0F A data precisa ser no futuro. Tente novamente."
                     )
                     return
                 }
                 sessionManager.updateSession(context.from, "dataHora", dateTime.toString(), "maxPlayers")
                 ws.sendList(
                     to = context.from,
-                    body = "\uD83D\uDC65 *Quantos jogadores?*",
+                    body = "\uD83D\uDC65 *Quantos jogadores?*\n\nEscolha o limite de vagas para a pelada.",
                     buttonLabel = "Escolher",
                     sections = listOf(
                         ListSection(
-                            title = "Quantidade",
+                            title = "Limite de Jogadores",
                             rows = listOf(
                                 ListRow(id = "/criar jogadores 4", title = "4 jogadores"),
                                 ListRow(id = "/criar jogadores 6", title = "6 jogadores"),
@@ -127,40 +129,45 @@ class CriarCommand(
                                 ListRow(id = "/criar jogadores 12", title = "12 jogadores"),
                                 ListRow(id = "/criar jogadores 16", title = "16 jogadores"),
                                 ListRow(id = "/criar jogadores 20", title = "20 jogadores"),
-                                ListRow(id = "/criar jogadores 0", title = "Sem limite", description = "Sem restricao de vagas"),
+                                ListRow(id = "/criar jogadores 0", title = "Sem limite", description = "Sem restrição de vagas"),
                                 ListRow(id = "/criar jogadores custom", title = "Personalizado", description = "Digitar quantidade")
                             )
                         )
-                    )
+                    ),
+                    footer = "Passo 4 de 6"
                 )
             }
             "maxPlayers" -> {
                 val max = value.toIntOrNull()
                 if (max == null || (max != 0 && max < 2)) {
-                    ws.sendMessage(context.from, "\u26A0\uFE0F Numero invalido. Minimo 2 jogadores.")
+                    ws.sendMessage(context.from, "\u26A0\uFE0F Número inválido. Mínimo de 2 jogadores.")
                     return
                 }
                 sessionManager.updateSession(context.from, "maxPlayers", max.toString(), "price")
                 ws.sendMessage(
                     context.from,
-                    "\uD83D\uDCB0 *Valor por jogador:*\n\nDigite o valor (ex: 25) ou 0 para gratis"
+                    "\uD83D\uDCB0 *Valor por jogador*\n\nDigite o valor em reais.\n_Ex: 25_\n\nDigite *0* para pelada gratuita.\n_Mínimo R$ 10 · Máximo R$ 100_"
                 )
             }
             "price" -> {
                 val price = value.replace(",", ".").toBigDecimalOrNull()
                 if (price == null || price < BigDecimal.ZERO) {
-                    ws.sendMessage(context.from, "\u26A0\uFE0F Valor invalido. Digite um numero (ex: 25 ou 0)")
+                    ws.sendMessage(context.from, "\u26A0\uFE0F Valor inválido. Digite um número.\n_Ex: 25 ou 0 para gratuita_")
                     return
                 }
-                if (price > BigDecimal.ZERO && price < BigDecimal(5)) {
-                    ws.sendMessage(context.from, "\u26A0\uFE0F Valor minimo para pelada paga e R$ 5,00. Digite 0 para gratis ou um valor a partir de 5.")
+                if (price > BigDecimal.ZERO && price < MIN_PRICE) {
+                    ws.sendMessage(context.from, "\u26A0\uFE0F O valor mínimo para pelada paga é *R$ $MIN_PRICE*.\nDigite *0* para gratuita ou um valor a partir de R$ $MIN_PRICE.")
+                    return
+                }
+                if (price > MAX_PRICE) {
+                    ws.sendMessage(context.from, "\u26A0\uFE0F O valor máximo por jogador é *R$ $MAX_PRICE*.")
                     return
                 }
                 if (price > BigDecimal.ZERO) {
                     sessionManager.updateSession(context.from, "price", price.toString(), "pixKey")
                     ws.sendMessage(
                         context.from,
-                        "\uD83D\uDCF2 *Chave Pix (obrigatorio):*\n\nDigite a chave Pix para receber os pagamentos dos jogadores.\n\n_Os valores serao repassados automaticamente com taxa de 10% da plataforma._"
+                        "\uD83D\uDCF2 *Chave Pix*\n\nDigite a chave Pix para receber os pagamentos.\n\n_Os valores serão repassados com taxa de 10% da plataforma._"
                     )
                 } else {
                     sessionManager.updateSession(context.from, "price", price.toString(), null)
@@ -171,7 +178,7 @@ class CriarCommand(
                 if (value.isBlank()) {
                     ws.sendMessage(
                         context.from,
-                        "\u26A0\uFE0F A chave Pix e obrigatoria para peladas pagas.\nDigite sua chave Pix (CPF, email, telefone ou chave aleatoria):"
+                        "\u26A0\uFE0F A chave Pix é obrigatória para peladas pagas.\nDigite sua chave Pix (CPF, e-mail, telefone ou chave aleatória):"
                     )
                     return
                 }
@@ -188,7 +195,7 @@ class CriarCommand(
             sessionManager.updateSession(context.from, "maxPlayers", "", "maxPlayers")
             ws.sendMessage(
                 context.from,
-                "\uD83D\uDC65 *Quantidade personalizada:*\n\nDigite o numero de jogadores (minimo 2):"
+                "\uD83D\uDC65 *Quantidade personalizada*\n\nDigite o número de jogadores _(mínimo 2)_:"
             )
             return
         }
@@ -196,7 +203,7 @@ class CriarCommand(
         sessionManager.updateSession(context.from, "maxPlayers", max, "price")
         ws.sendMessage(
             context.from,
-            "\uD83D\uDCB0 *Valor por jogador:*\n\nDigite o valor (ex: 25) ou 0 para gratis"
+            "\uD83D\uDCB0 *Valor por jogador*\n\nDigite o valor em reais.\n_Ex: 25_\n\nDigite *0* para pelada gratuita.\n_Mínimo R$ 10 · Máximo R$ 100_"
         )
     }
 
@@ -206,30 +213,32 @@ class CriarCommand(
 
         val esporte = fields["esporte"]?.let { runCatching { Esporte.valueOf(it) }.getOrNull() }
         val dateTime = fields["dataHora"]?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() }
+        val price = fields["price"]?.toBigDecimalOrNull() ?: BigDecimal.ZERO
+        val maxPlayers = fields["maxPlayers"]
 
         ws.sendMessage(
             context.from,
             buildString {
                 append("\uD83D\uDCCB *Resumo da Pelada*\n\n")
                 append("\uD83C\uDFC6 *Esporte:* ${esporte?.label ?: fields["esporte"]}\n")
-                append("\uD83D\uDCDD *Descricao:* ${fields["descricao"] ?: "-"}\n")
+                append("\uD83D\uDCDD *Descrição:* ${fields["descricao"] ?: "—"}\n")
                 append("\uD83D\uDCCD *Local:* ${fields["local"]}\n")
                 append("\uD83D\uDCC5 *Data:* ${dateTime?.format(DATE_FORMATTER_FULL) ?: fields["dataHora"]}\n")
-                val maxPlayersDisplay = if (fields["maxPlayers"] == "0") "Sem limite" else fields["maxPlayers"]
-                append("\uD83D\uDC65 *Jogadores:* $maxPlayersDisplay\n")
-                append("\uD83D\uDCB0 *Valor:* R$ ${fields["price"]}\n")
+                append("\uD83D\uDC65 *Jogadores:* ${if (maxPlayers == "0") "Sem limite" else maxPlayers}\n")
+                append("\uD83D\uDCB0 *Valor:* ${if (price > BigDecimal.ZERO) "R$ $price" else "Gratuita"}\n")
                 if (!fields["pixKey"].isNullOrBlank()) {
                     append("\uD83D\uDCF2 *Pix:* ${fields["pixKey"]}\n")
                 }
+                append("\n_Confira os dados e confirme a criação._")
             }
         )
 
         ws.sendButtons(
             to = context.from,
-            body = "Confirma a criacao?",
+            body = "Tudo certo?",
             buttons = listOf(
-                Button(id = "/criar confirmar", title = "Confirmar"),
-                Button(id = "/criar cancelar", title = "Cancelar")
+                Button(id = "/criar confirmar", title = "\u2705 Confirmar"),
+                Button(id = "/criar cancelar", title = "\u274C Cancelar")
             )
         )
     }
@@ -237,21 +246,21 @@ class CriarCommand(
     private fun confirm(context: CommandContext, ws: WhatsAppService) {
         val session = sessionManager.getSession(context.from)
         if (session == null) {
-            ws.sendMessage(context.from, "\u26A0\uFE0F Sessao expirada. Use /criar para iniciar novamente.")
+            ws.sendMessage(context.from, "\u26A0\uFE0F Sessão expirada. Inicie novamente com /criar.")
             return
         }
 
         val fields = session.collectedFields
 
         try {
-            val esporte = Esporte.valueOf(fields["esporte"] ?: throw IllegalArgumentException("Esporte obrigatorio"))
-            val dateTime = LocalDateTime.parse(fields["dataHora"] ?: throw IllegalArgumentException("Data obrigatoria"))
-            val maxPlayers = fields["maxPlayers"]?.toInt() ?: throw IllegalArgumentException("Limite obrigatorio")
+            val esporte = Esporte.valueOf(fields["esporte"] ?: throw IllegalArgumentException("Esporte obrigatório"))
+            val dateTime = LocalDateTime.parse(fields["dataHora"] ?: throw IllegalArgumentException("Data obrigatória"))
+            val maxPlayers = fields["maxPlayers"]?.toInt() ?: throw IllegalArgumentException("Limite obrigatório")
             val price = fields["price"]?.toBigDecimal() ?: BigDecimal.ZERO
             val pixKey = fields["pixKey"]
 
             if (price > BigDecimal.ZERO && pixKey.isNullOrBlank()) {
-                throw IllegalArgumentException("Chave Pix obrigatoria para peladas pagas")
+                throw IllegalArgumentException("Chave Pix obrigatória para peladas pagas")
             }
 
             val pelada = peladaService.create(
@@ -260,7 +269,7 @@ class CriarCommand(
                     esporte = esporte.name,
                     descricao = fields["descricao"],
                     dataHora = dateTime,
-                    local = fields["local"] ?: throw IllegalArgumentException("Local obrigatorio"),
+                    local = fields["local"] ?: throw IllegalArgumentException("Local obrigatório"),
                     limiteJogadores = maxPlayers,
                     valorPorJogador = price,
                     chavePix = fields["pixKey"]
@@ -272,16 +281,16 @@ class CriarCommand(
             ws.sendMessage(
                 context.from,
                 buildString {
-                    append("\u2705 *Pelada Criada!*\n\n")
-                    append("\uD83D\uDD11 *Codigo:* ${pelada.codigo}\n\n")
-                    append("Compartilhe o codigo *${pelada.codigo}* com seus amigos para eles entrarem!\n\n")
-                    append("_Basta enviar o codigo ${pelada.codigo} aqui no chat para participar._")
+                    append("\u2705 *Pelada Criada com Sucesso!*\n\n")
+                    append("\uD83D\uDD11 Código: *${pelada.codigo}*\n\n")
+                    append("Compartilhe o código *${pelada.codigo}* com seus amigos para que eles participem!\n\n")
+                    append("_Basta enviar o código aqui no chat para entrar._")
                 }
             )
 
             ws.sendButtons(
                 to = context.from,
-                body = "O que deseja fazer?",
+                body = "Próximos passos:",
                 buttons = listOf(
                     Button(id = "/gerenciar convidar ${pelada.codigo}", title = "Convidar Amigos"),
                     Button(id = "/gerenciar pelada ${pelada.codigo}", title = "Gerenciar"),
@@ -291,7 +300,7 @@ class CriarCommand(
         } catch (e: Exception) {
             log.error("Error creating pelada for {}: {}", context.from, e.message, e)
             sessionManager.clear(context.from)
-            ws.sendMessage(context.from, "\u274C Ocorreu um erro ao criar a pelada. Tente novamente mais tarde.")
+            ws.sendMessage(context.from, "\u274C Ocorreu um erro ao criar a pelada. Tente novamente.")
             ws.sendButtons(
                 to = context.from,
                 body = "O que deseja fazer?",
@@ -305,7 +314,7 @@ class CriarCommand(
 
     private fun cancelCreation(context: CommandContext, ws: WhatsAppService) {
         sessionManager.clear(context.from)
-        ws.sendMessage(context.from, "\u274C Criacao cancelada.")
+        ws.sendMessage(context.from, "\u274C Criação cancelada.")
         ws.sendButtons(
             to = context.from,
             body = "O que deseja fazer?",
@@ -320,7 +329,6 @@ class CriarCommand(
         return try {
             val clean = input.trim()
             if (clean.contains("/") && clean.count { it == '/' } == 1) {
-                // DD/MM HH:MM — add current year
                 val parts = clean.split(" ", limit = 2)
                 val datePart = parts[0]
                 val timePart = parts.getOrElse(1) { "00:00" }

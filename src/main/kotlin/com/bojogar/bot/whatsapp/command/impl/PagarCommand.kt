@@ -11,7 +11,6 @@ import com.bojogar.bot.whatsapp.session.ConversationState
 import com.bojogar.bot.whatsapp.session.SessionManager
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.math.BigDecimal
 
 @Component
 class PagarCommand(
@@ -46,19 +45,18 @@ class PagarCommand(
         val pending = pagamentoService.getUserPendingPayments(context.from)
 
         if (pending.isEmpty()) {
-            ws.sendMessage(context.from, "\u2705 Voce nao tem pagamentos pendentes!")
+            ws.sendMessage(context.from, "\u2705 Você não tem pagamentos pendentes!")
             ws.sendButtons(
                 to = context.from,
                 body = "O que deseja fazer?",
                 buttons = listOf(
-                    Button(id = "/minhas", title = "Minhas Peladas"),
+                    Button(id = "/minhas proximas", title = "Minhas Peladas"),
                     Button(id = "/start", title = "Menu Inicial")
                 )
             )
             return
         }
 
-        // List peladas with pending payments using participant data
         val participations = participantService.getUserParticipations(context.from)
         val peladasWithPending = participations.mapNotNull { p ->
             val payment = pagamentoService.findPendingPaymentForUser(context.from, p.peladaCodigo)
@@ -69,12 +67,12 @@ class PagarCommand(
         }
 
         if (peladasWithPending.isEmpty()) {
-            ws.sendMessage(context.from, "\u2705 Voce nao tem pagamentos pendentes!")
+            ws.sendMessage(context.from, "\u2705 Você não tem pagamentos pendentes!")
             ws.sendButtons(
                 to = context.from,
                 body = "O que deseja fazer?",
                 buttons = listOf(
-                    Button(id = "/minhas", title = "Minhas Peladas"),
+                    Button(id = "/minhas proximas", title = "Minhas Peladas"),
                     Button(id = "/start", title = "Menu Inicial")
                 )
             )
@@ -88,8 +86,8 @@ class PagarCommand(
 
         ws.sendList(
             to = context.from,
-            header = "Pagamentos Pendentes",
-            body = "\uD83D\uDCB0 ${peladasWithPending.size} pagamento(s) pendente(s):",
+            header = "\uD83D\uDCB0 Pagamentos Pendentes",
+            body = "Você tem *${peladasWithPending.size}* pagamento(s) pendente(s).\nSelecione para visualizar ou pagar:",
             buttonLabel = "Ver Pagamentos",
             sections = listOf(
                 ListSection(
@@ -99,7 +97,7 @@ class PagarCommand(
                         ListRow(
                             id = "/pagar ver ${pelada.codigo}",
                             title = "$icon ${pelada.esporteLabel} — ${pelada.codigo}",
-                            description = "R$ ${payment.valor} | ${pelada.local.take(20)}"
+                            description = "R$ ${payment.valor} · ${pelada.local.take(20)}"
                         )
                     }
                 )
@@ -113,19 +111,26 @@ class PagarCommand(
 
         val pelada = peladaService.findByCode(code)
         if (pelada == null) {
-            ws.sendMessage(context.from, "\u26A0\uFE0F Pelada *$code* nao encontrada.")
+            ws.sendMessage(context.from, "\u26A0\uFE0F Pelada *$code* não encontrada.")
             return
         }
 
         val payment = pagamentoService.findPendingPaymentForUser(context.from, code)
 
         if (payment == null) {
-            ws.sendMessage(context.from, "\u2705 Voce nao tem pagamento pendente para a pelada *$code*.")
+            ws.sendMessage(context.from, "\u2705 Você não tem pagamento pendente para a pelada *$code*.")
+            ws.sendButtons(
+                to = context.from,
+                body = "O que deseja fazer?",
+                buttons = listOf(
+                    Button(id = "/minhas proximas", title = "Minhas Peladas"),
+                    Button(id = "/start", title = "Menu Inicial")
+                )
+            )
             return
         }
 
         if (payment.pixCode != null) {
-            // PIX already generated — show it
             ws.sendMessage(
                 context.from,
                 buildString {
@@ -134,20 +139,19 @@ class PagarCommand(
                     append("\uD83D\uDCCD ${pelada.local}\n")
                     append("\uD83D\uDCB5 *Valor:* R$ ${payment.valor}\n\n")
                     append("\uD83D\uDCF2 *PIX Copia e Cola:*\n")
-                    append("_Copie o codigo abaixo e cole no seu app bancario:_")
+                    append("_Copie o código abaixo e cole no app do seu banco:_")
                 }
             )
             ws.sendMessage(context.from, payment.pixCode!!)
             ws.sendButtons(
                 to = context.from,
-                body = "Apos pagar, o pagamento sera confirmado automaticamente!",
+                body = "Após o pagamento, a confirmação é automática!",
                 buttons = listOf(
-                    Button(id = "/minhas", title = "Minhas Peladas"),
+                    Button(id = "/minhas proximas", title = "Minhas Peladas"),
                     Button(id = "/start", title = "Menu Inicial")
                 )
             )
         } else {
-            // PIX not generated — offer to generate
             ws.sendMessage(
                 context.from,
                 buildString {
@@ -155,14 +159,15 @@ class PagarCommand(
                     append("\uD83C\uDFC6 ${pelada.esporteLabel}\n")
                     append("\uD83D\uDCCD ${pelada.local}\n")
                     append("\uD83D\uDCB5 *Valor:* R$ ${payment.valor}\n\n")
-                    append("Gere o codigo PIX para pagar!")
+                    append("Gere o código PIX para efetuar o pagamento.")
                 }
             )
             ws.sendButtons(
                 to = context.from,
-                body = "Deseja gerar o PIX?",
+                body = "Deseja gerar o PIX agora?",
                 buttons = listOf(
                     Button(id = "/pagar gerar $code", title = "Gerar PIX"),
+                    Button(id = "/minhas proximas", title = "Minhas Peladas"),
                     Button(id = "/start", title = "Menu Inicial")
                 )
             )
@@ -174,35 +179,31 @@ class PagarCommand(
 
         val pelada = peladaService.findByCode(code)
         if (pelada == null) {
-            ws.sendMessage(context.from, "\u26A0\uFE0F Pelada *$code* nao encontrada.")
+            ws.sendMessage(context.from, "\u26A0\uFE0F Pelada *$code* não encontrada.")
             return
         }
 
         val payment = pagamentoService.findPendingPaymentForUser(context.from, code)
         if (payment == null) {
-            ws.sendMessage(context.from, "\u2705 Voce nao tem pagamento pendente para esta pelada.")
+            ws.sendMessage(context.from, "\u2705 Você não tem pagamento pendente para esta pelada.")
             return
         }
 
-        // If PIX already exists, just show it
         if (payment.pixCode != null) {
             showPaymentDetails(context, ws, code)
             return
         }
 
-        // Check if user has CPF
         val cpf = userService.getUserCpf(context.from)
         if (cpf == null) {
-            // Ask for CPF
             sessionManager.setCurrentPelada(context.from, code, ConversationState.ENTERING_CPF)
             ws.sendMessage(
                 context.from,
-                "\uD83D\uDCCB *CPF Necessario*\n\nPara gerar o PIX, precisamos do seu CPF.\n\nDigite os 11 digitos do seu CPF:"
+                "\uD83D\uDCCB *CPF Necessário*\n\nPara gerar o PIX, precisamos do seu CPF.\n\nDigite os *11 dígitos* do seu CPF:"
             )
             return
         }
 
-        // Generate PIX
         doGeneratePix(context, ws, code, cpf)
     }
 
@@ -213,18 +214,16 @@ class PagarCommand(
         val cpf = rawCpf.replace(Regex("[^0-9]"), "")
 
         if (!CPF_PATTERN.matches(cpf)) {
-            ws.sendMessage(context.from, "\u26A0\uFE0F CPF invalido. Digite apenas os 11 digitos numéricos:")
+            ws.sendMessage(context.from, "\u26A0\uFE0F CPF inválido. Digite apenas os 11 dígitos numéricos:")
             return
         }
 
-        // Save CPF
         userService.updateCpf(context.from, cpf)
         sessionManager.clear(context.from)
 
-        // Now generate PIX
         val payment = pagamentoService.findPendingPaymentForUser(context.from, code)
         if (payment == null) {
-            ws.sendMessage(context.from, "\u2705 Pagamento nao encontrado ou ja foi confirmado.")
+            ws.sendMessage(context.from, "\u2705 Pagamento não encontrado ou já foi confirmado.")
             return
         }
 
@@ -245,7 +244,7 @@ class PagarCommand(
 
         val payment = pagamentoService.findPendingPaymentForUser(context.from, code)
         if (payment == null) {
-            ws.sendMessage(context.from, "\u2705 Pagamento nao encontrado ou ja confirmado.")
+            ws.sendMessage(context.from, "\u2705 Pagamento não encontrado ou já confirmado.")
             return
         }
 
@@ -271,21 +270,21 @@ class PagarCommand(
                             append("\uD83D\uDCB5 *Valor:* R$ ${pelada.valorPorJogador}\n\n")
                         }
                         append("\uD83D\uDCF2 *PIX Copia e Cola:*\n")
-                        append("_Copie o codigo abaixo e cole no seu app bancario:_")
+                        append("_Copie o código abaixo e cole no app do seu banco:_")
                     }
                 )
                 ws.sendMessage(context.from, result.pixCode)
                 ws.sendButtons(
                     to = context.from,
-                    body = "Apos pagar, o pagamento sera confirmado automaticamente!",
+                    body = "Após o pagamento, a confirmação é automática!",
                     buttons = listOf(
-                        Button(id = "/minhas", title = "Minhas Peladas"),
+                        Button(id = "/minhas proximas", title = "Minhas Peladas"),
                         Button(id = "/start", title = "Menu Inicial")
                     )
                 )
             }
             is PixGenerationResult.Error -> {
-                ws.sendMessage(context.from, "\u274C Erro ao gerar PIX. Tente novamente mais tarde.")
+                ws.sendMessage(context.from, "\u274C Erro ao gerar o PIX. Tente novamente.")
                 ws.sendButtons(
                     to = context.from,
                     body = "O que deseja fazer?",
