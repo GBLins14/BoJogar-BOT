@@ -9,7 +9,7 @@ import java.time.Instant
 @Table(name = "pagamentos")
 class Pagamento(
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "participant_id", nullable = false)
+    @JoinColumn(name = "inscricao_id", nullable = false)
     val participant: PeladaParticipant,
 
     @Column(nullable = false, precision = 10, scale = 2)
