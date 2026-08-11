@@ -65,7 +65,7 @@ class SyncPayClient(
         log.info("Initiating cashout - amount: {}, pixKey: {}..., type: {}", amount, pixKey.take(6), pixKeyType)
 
         val response = restClient.post()
-            .uri("/api/partner/v1/cash-out")
+            .uri("/api/partner/v1/cashout")
             .header("Authorization", "Bearer $token")
             .header("Accept", "application/json")
             .body(request)
