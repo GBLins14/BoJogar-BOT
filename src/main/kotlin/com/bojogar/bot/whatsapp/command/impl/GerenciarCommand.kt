@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
@@ -35,6 +36,7 @@ class GerenciarCommand(
 
     companion object {
         private val log = LoggerFactory.getLogger(GerenciarCommand::class.java)
+        private val ZONE_BR = ZoneId.of("America/Sao_Paulo")
         private val MIN_PRICE = BigDecimal(10)
         private val MAX_PRICE = BigDecimal(100)
     }
@@ -539,7 +541,7 @@ class GerenciarCommand(
                 "dataHora" -> {
                     val dateTime = parseDateTime(value)
                         ?: throw IllegalArgumentException("Não entendi a data. Use DD/MM HH:MM")
-                    if (dateTime.isBefore(LocalDateTime.now())) {
+                    if (dateTime.isBefore(LocalDateTime.now(ZONE_BR))) {
                         throw IllegalArgumentException("A data precisa ser no futuro")
                     }
                     UpdatePeladaRequest(dataHora = dateTime)
@@ -691,7 +693,7 @@ class GerenciarCommand(
                 val parts = clean.split(" ", limit = 2)
                 val datePart = parts[0]
                 val timePart = parts.getOrElse(1) { "00:00" }
-                val year = LocalDateTime.now().year
+                val year = LocalDateTime.now(ZONE_BR).year
                 LocalDateTime.parse("$datePart/$year $timePart", DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
             } else {
                 LocalDateTime.parse(clean, DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))

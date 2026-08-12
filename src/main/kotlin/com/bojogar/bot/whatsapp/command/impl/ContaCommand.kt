@@ -11,6 +11,7 @@ import com.bojogar.bot.whatsapp.service.WhatsAppService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.time.LocalDateTime
+import java.time.ZoneId
 
 @Component
 class ContaCommand(
@@ -24,6 +25,7 @@ class ContaCommand(
 
     companion object {
         private val log = LoggerFactory.getLogger(ContaCommand::class.java)
+        private val ZONE_BR = ZoneId.of("America/Sao_Paulo")
     }
 
     override fun execute(context: CommandContext, whatsappService: WhatsAppService) {
@@ -44,7 +46,7 @@ class ContaCommand(
             p.status in listOf("CONFIRMED", "WAITLIST") &&
                 pelada != null &&
                 pelada.status in listOf("OPEN", "FULL") &&
-                pelada.dataHora.isAfter(LocalDateTime.now())
+                pelada.dataHora.isAfter(LocalDateTime.now(ZONE_BR))
         }
         val played = allParticipations.count { p ->
             val pelada = peladaMap[p.peladaCodigo]

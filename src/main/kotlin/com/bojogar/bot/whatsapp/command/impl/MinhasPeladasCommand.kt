@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
 import java.time.LocalDateTime
+import java.time.ZoneId
 
 @Component
 class MinhasPeladasCommand(
@@ -32,6 +33,7 @@ class MinhasPeladasCommand(
 
     companion object {
         private val log = LoggerFactory.getLogger(MinhasPeladasCommand::class.java)
+        private val ZONE_BR = ZoneId.of("America/Sao_Paulo")
     }
 
     override fun execute(context: CommandContext, whatsappService: WhatsAppService) {
@@ -69,7 +71,7 @@ class MinhasPeladasCommand(
         val upcoming = participations.filter { p ->
             val pelada = peladaMap[p.peladaCodigo]
             pelada != null &&
-                pelada.dataHora.isAfter(LocalDateTime.now()) &&
+                pelada.dataHora.isAfter(LocalDateTime.now(ZONE_BR)) &&
                 pelada.status in listOf("OPEN", "FULL")
         }
 
@@ -262,7 +264,7 @@ class MinhasPeladasCommand(
         val past = all.filter { p ->
             val pelada = peladaMap[p.peladaCodigo]
             pelada != null && (
-                pelada.dataHora.isBefore(LocalDateTime.now()) ||
+                pelada.dataHora.isBefore(LocalDateTime.now(ZONE_BR)) ||
                     pelada.status in listOf("FINISHED", "CANCELLED") ||
                     p.status in listOf("CANCELLED", "REMOVED")
                 )

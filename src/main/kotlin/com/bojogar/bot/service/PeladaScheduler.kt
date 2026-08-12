@@ -7,6 +7,7 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
+import java.time.ZoneId
 
 @Component
 class PeladaScheduler(
@@ -15,13 +16,14 @@ class PeladaScheduler(
 
     companion object {
         private val log = LoggerFactory.getLogger(PeladaScheduler::class.java)
+        private val ZONE_BR = ZoneId.of("America/Sao_Paulo")
         private const val HOURS_TO_FINISH = 3L
     }
 
     @Scheduled(fixedRate = 900_000) // 15 minutes
     @Transactional
     fun autoTransitionStatuses() {
-        val now = LocalDateTime.now()
+        val now = LocalDateTime.now(ZONE_BR)
 
         // OPEN/FULL peladas past their dateTime -> IN_PROGRESS
         val pastStart = peladaRepository.findByStatusInAndDataHoraBefore(

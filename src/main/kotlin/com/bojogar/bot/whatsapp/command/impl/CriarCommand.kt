@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
@@ -30,6 +31,7 @@ class CriarCommand(
     companion object {
         private val log = LoggerFactory.getLogger(CriarCommand::class.java)
         private val DATE_FORMATTER_FULL = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
+        private val ZONE_BR = ZoneId.of("America/Sao_Paulo")
         private val MIN_PRICE = BigDecimal(10)
         private val MAX_PRICE = BigDecimal(100)
     }
@@ -124,7 +126,7 @@ class CriarCommand(
                     ws.sendMessage(context.from, "\u26A0\uFE0F Não entendi a data.\n\nUse o formato *DD/MM HH:MM*\n_Ex: 15/08 19:00_")
                     return
                 }
-                if (dateTime.isBefore(LocalDateTime.now())) {
+                if (dateTime.isBefore(LocalDateTime.now(ZONE_BR))) {
                     ws.sendMessage(context.from, "\u26A0\uFE0F Essa data já passou. Digite uma data futura.")
                     return
                 }
@@ -293,7 +295,7 @@ class CriarCommand(
             val maxPlayers = fields["maxPlayers"]?.toInt() ?: throw IllegalArgumentException("Limite obrigatório")
             val price = fields["price"]?.toBigDecimal() ?: BigDecimal.ZERO
 
-            if (dateTime.isBefore(LocalDateTime.now())) {
+            if (dateTime.isBefore(LocalDateTime.now(ZONE_BR))) {
                 sessionManager.updateSession(context.from, "dataHora", "", "dataHora")
                 ws.sendButtons(
                     to = context.from,
@@ -378,7 +380,7 @@ class CriarCommand(
                 val parts = clean.split(" ", limit = 2)
                 val datePart = parts[0]
                 val timePart = parts.getOrElse(1) { "00:00" }
-                val year = LocalDateTime.now().year
+                val year = LocalDateTime.now(ZONE_BR).year
                 LocalDateTime.parse("$datePart/$year $timePart", DATE_FORMATTER_FULL)
             } else {
                 LocalDateTime.parse(clean, DATE_FORMATTER_FULL)
