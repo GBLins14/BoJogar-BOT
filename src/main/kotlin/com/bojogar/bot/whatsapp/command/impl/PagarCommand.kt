@@ -199,9 +199,10 @@ class PagarCommand(
         val cpf = userService.getUserCpf(context.from)
         if (cpf == null) {
             sessionManager.setCurrentPelada(context.from, code, ConversationState.ENTERING_CPF)
-            ws.sendMessage(
-                context.from,
-                "\uD83D\uDCCB *CPF Necessário*\n\nPara gerar o PIX, precisamos do seu CPF.\n\nDigite os *11 dígitos* do seu CPF:\n\n_Digite *cancelar* para voltar ao menu._"
+            ws.sendButtons(
+                to = context.from,
+                body = "\uD83D\uDCCB *CPF Necessário*\n\nPara gerar o PIX, precisamos do seu CPF.\n\nDigite os *11 dígitos* do seu CPF:",
+                buttons = listOf(Button(id = "/start", title = "\u274C Cancelar"))
             )
             return
         }

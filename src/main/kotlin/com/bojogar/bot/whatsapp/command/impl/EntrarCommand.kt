@@ -41,9 +41,10 @@ class EntrarCommand(
     private fun askForCode(context: CommandContext, ws: WhatsAppService) {
         log.info("Solicitando código de pelada para {}", context.from)
         sessionManager.startEnteringCode(context.from)
-        ws.sendMessage(
-            context.from,
-            "\uD83D\uDD11 *Entrar em uma Pelada*\n\nDigite o código da pelada (6 caracteres):\n\n_Digite *cancelar* para voltar ao menu._"
+        ws.sendButtons(
+            to = context.from,
+            body = "\uD83D\uDD11 *Entrar em uma Pelada*\n\nDigite o código da pelada (6 caracteres):",
+            buttons = listOf(Button(id = "/start", title = "\u274C Cancelar"))
         )
     }
 

@@ -529,7 +529,11 @@ class GerenciarCommand(
                 "chavePix" -> "nova chave Pix"
                 else -> "novo valor"
             }
-            ws.sendMessage(context.from, "\u270F\uFE0F Digite o $label:\n\n_Digite *cancelar* para voltar ao menu._")
+            ws.sendButtons(
+                to = context.from,
+                body = "\u270F\uFE0F Digite o $label:",
+                buttons = listOf(Button(id = "/gerenciar pelada $code", title = "\u274C Cancelar"))
+            )
             return
         }
 

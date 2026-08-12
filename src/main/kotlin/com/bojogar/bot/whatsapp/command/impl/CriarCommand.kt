@@ -71,9 +71,11 @@ class CriarCommand(
             sessionManager.startCreatingPelada(context.from)
         }
         sessionManager.updateSession(context.from, "esporte", sport, "descricao")
-        ws.sendMessage(
-            context.from,
-            "\uD83D\uDCDD *Descrição da pelada*\n\nDigite uma breve descrição.\n_Ex: Pelada de quarta na praia_\n\n_Digite *cancelar* para voltar ao menu._"
+        ws.sendButtons(
+            to = context.from,
+            body = "\uD83D\uDCDD *Descrição da pelada*\n\nDigite uma breve descrição.\n_Ex: Pelada de quarta na praia_",
+            buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar")),
+            footer = "Passo 2 de 6"
         )
     }
 
@@ -88,16 +90,20 @@ class CriarCommand(
         when (field) {
             "descricao" -> {
                 sessionManager.updateSession(context.from, "descricao", value, "local")
-                ws.sendMessage(
-                    context.from,
-                    "\uD83D\uDCCD *Local da pelada*\n\nDigite o endereço ou nome do local.\n_Ex: Quadra Arena Beach — Boa Viagem_\n\n_Digite *cancelar* para voltar ao menu._"
+                ws.sendButtons(
+                    to = context.from,
+                    body = "\uD83D\uDCCD *Local da pelada*\n\nDigite o endereço ou nome do local.\n_Ex: Quadra Arena Beach — Boa Viagem_",
+                    buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar")),
+                    footer = "Passo 3 de 6"
                 )
             }
             "local" -> {
                 sessionManager.updateSession(context.from, "local", value, "dataHora")
-                ws.sendMessage(
-                    context.from,
-                    "\uD83D\uDCC5 *Data e horário*\n\nDigite no formato *DD/MM HH:MM*\n_Ex: 15/08 19:00_\n\n_Digite *cancelar* para voltar ao menu._"
+                ws.sendButtons(
+                    to = context.from,
+                    body = "\uD83D\uDCC5 *Data e horário*\n\nDigite no formato *DD/MM HH:MM*\n_Ex: 15/08 19:00_",
+                    buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar")),
+                    footer = "Passo 4 de 6"
                 )
             }
             "dataHora" -> {
@@ -147,9 +153,11 @@ class CriarCommand(
                     return
                 }
                 sessionManager.updateSession(context.from, "maxPlayers", max.toString(), "price")
-                ws.sendMessage(
-                    context.from,
-                    "\uD83D\uDCB0 *Valor por jogador*\n\nDigite o valor em reais.\n_Ex: 25_\n\nDigite *0* para pelada gratuita.\n_Mínimo R$ 10 · Máximo R$ 100_\n\n_Digite *cancelar* para voltar ao menu._"
+                ws.sendButtons(
+                    to = context.from,
+                    body = "\uD83D\uDCB0 *Valor por jogador*\n\nDigite o valor em reais.\n_Ex: 25_\n\nDigite *0* para pelada gratuita.\n_Mínimo R$ 10 · Máximo R$ 100_",
+                    buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar")),
+                    footer = "Passo 5 de 6"
                 )
             }
             "price" -> {
@@ -168,9 +176,11 @@ class CriarCommand(
                 }
                 if (price > BigDecimal.ZERO) {
                     sessionManager.updateSession(context.from, "price", price.toString(), "pixKey")
-                    ws.sendMessage(
-                        context.from,
-                        "\uD83D\uDCF2 *Chave Pix*\n\nDigite a chave Pix para receber os pagamentos.\n\n_Os valores serão repassados com taxa de 10% da plataforma._\n\n_Digite *cancelar* para voltar ao menu._"
+                    ws.sendButtons(
+                        to = context.from,
+                        body = "\uD83D\uDCF2 *Chave Pix*\n\nDigite a chave Pix para receber os pagamentos.\n\n_Os valores serão repassados com taxa de 10% da plataforma._",
+                        buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar")),
+                        footer = "Passo 6 de 6"
                     )
                 } else {
                     sessionManager.updateSession(context.from, "price", price.toString(), null)
@@ -196,17 +206,20 @@ class CriarCommand(
 
         if (max == "custom") {
             sessionManager.updateSession(context.from, "maxPlayers", "", "maxPlayers")
-            ws.sendMessage(
-                context.from,
-                "\uD83D\uDC65 *Quantidade personalizada*\n\nDigite o número de jogadores _(mínimo 2)_:"
+            ws.sendButtons(
+                to = context.from,
+                body = "\uD83D\uDC65 *Quantidade personalizada*\n\nDigite o número de jogadores _(mínimo 2)_:",
+                buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar"))
             )
             return
         }
 
         sessionManager.updateSession(context.from, "maxPlayers", max, "price")
-        ws.sendMessage(
-            context.from,
-            "\uD83D\uDCB0 *Valor por jogador*\n\nDigite o valor em reais.\n_Ex: 25_\n\nDigite *0* para pelada gratuita.\n_Mínimo R$ 10 · Máximo R$ 100_\n\n_Digite *cancelar* para voltar ao menu._"
+        ws.sendButtons(
+            to = context.from,
+            body = "\uD83D\uDCB0 *Valor por jogador*\n\nDigite o valor em reais.\n_Ex: 25_\n\nDigite *0* para pelada gratuita.\n_Mínimo R$ 10 · Máximo R$ 100_",
+            buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar")),
+            footer = "Passo 5 de 6"
         )
     }
 
