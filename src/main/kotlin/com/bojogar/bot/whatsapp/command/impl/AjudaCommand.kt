@@ -3,6 +3,8 @@ package com.bojogar.bot.whatsapp.command.impl
 import com.bojogar.bot.whatsapp.command.BotCommand
 import com.bojogar.bot.whatsapp.command.CommandContext
 import com.bojogar.bot.whatsapp.model.Button
+import com.bojogar.bot.whatsapp.model.ListRow
+import com.bojogar.bot.whatsapp.model.ListSection
 import com.bojogar.bot.whatsapp.service.WhatsAppService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -22,77 +24,95 @@ class AjudaCommand : BotCommand {
         val sub = context.args.firstOrNull()
 
         when (sub) {
+            "criar" -> showCriar(context, whatsappService)
+            "entrar" -> showEntrar(context, whatsappService)
+            "pagar" -> showPagar(context, whatsappService)
+            "organizador" -> showOrganizador(context, whatsappService)
             "suporte" -> showSuporte(context, whatsappService)
-            else -> showComoFunciona(context, whatsappService)
+            else -> showTopics(context, whatsappService)
         }
     }
 
-    private fun showComoFunciona(context: CommandContext, ws: WhatsAppService) {
-        log.info("Exibindo 'Como Funciona' para {}", context.from)
+    private fun showTopics(context: CommandContext, ws: WhatsAppService) {
+        log.info("Exibindo tópicos de ajuda para {}", context.from)
+
+        ws.sendList(
+            to = context.from,
+            header = "❓ Como Funciona",
+            body = "Escolha um tópico para saber mais.",
+            buttonLabel = "Ver Tópicos",
+            sections = listOf(
+                ListSection(
+                    title = "Tópicos de Ajuda",
+                    rows = listOf(
+                        ListRow(id = "/ajuda criar", title = "Criar Pelada", description = "Como organizar uma pelada"),
+                        ListRow(id = "/ajuda entrar", title = "Entrar em uma Pelada", description = "Como participar"),
+                        ListRow(id = "/ajuda pagar", title = "Pagamentos", description = "Como funciona o PIX"),
+                        ListRow(id = "/ajuda organizador", title = "Para Organizadores", description = "Gerenciar jogadores e saldo"),
+                        ListRow(id = "/ajuda suporte", title = "\uD83D\uDCDE Suporte", description = "Fale com a gente")
+                    )
+                )
+            )
+        )
+    }
+
+    private fun showCriar(context: CommandContext, ws: WhatsAppService) {
+        log.info("Exibindo ajuda 'Criar Pelada' para {}", context.from)
 
         ws.sendMessage(
             context.from,
-            buildString {
-                append("*Como funciona o BoJogar?*\n\n")
-                append("O BoJogar e o seu assistente para organizar peladas pelo WhatsApp! ")
-                append("Aqui voce cria, gerencia e participa de peladas de forma rapida e pratica.\n\n")
-
-                append("*1. Criar uma Pelada*\n")
-                append("Toque em *Criar Pelada* no menu principal. Voce vai escolher o esporte, ")
-                append("definir local, data, numero de jogadores e valor por pessoa. ")
-                append("No final, voce recebe um *codigo de 6 caracteres* para compartilhar com os amigos.\n\n")
-
-                append("*2. Entrar em uma Pelada*\n")
-                append("Recebeu um codigo? Basta enviar aqui no chat ou tocar em *Entrar com Codigo*. ")
-                append("Voce ve os detalhes da pelada e confirma sua participacao.\n\n")
-
-                append("*3. Pagamento via PIX*\n")
-                append("Se a pelada for paga, voce recebe um codigo PIX Copia e Cola. ")
-                append("Copie, cole no app do seu banco e pague. ")
-                append("A confirmacao e *automatica* - assim que o pagamento cair, sua vaga e garantida!\n\n")
-
-                append("*4. Lista de Espera*\n")
-                append("Se a pelada estiver lotada, voce entra na lista de espera. ")
-                append("Quando alguem sair, voce e promovido automaticamente e recebe uma notificacao.\n\n")
-
-                append("*5. Gerenciar Peladas (Organizador)*\n")
-                append("Se voce criou a pelada, tem acesso ao *Painel Admin* onde pode:\n")
-                append("  - Ver e remover participantes\n")
-                append("  - Acompanhar pagamentos e saldo\n")
-                append("  - Editar local, data, valor\n")
-                append("  - Convidar amigos com link\n")
-                append("  - Solicitar saque do saldo\n\n")
-
-                append("*6. Minha Conta*\n")
-                append("Em *Minha Conta* voce ve suas peladas ativas, historico e pode resetar suas inscricoes.\n\n")
-
-                append("Qualquer duvida, toque em *Suporte* para falar com a gente!")
-            }
+            "*Como criar uma pelada*\n\n" +
+                "Toque em *Criar Pelada* no menu. Você escolhe o esporte, local, data, número de jogadores e valor.\n\n" +
+                "No final, recebe um código de 6 letras para compartilhar com os amigos."
         )
 
-        ws.sendButtons(
-            to = context.from,
-            body = "Precisa de mais alguma coisa?",
-            buttons = listOf(
-                Button(id = "/ajuda suporte", title = "Falar com Suporte"),
-                Button(id = "/start", title = "Menu Inicial")
-            )
+        sendNavigationButtons(context, ws)
+    }
+
+    private fun showEntrar(context: CommandContext, ws: WhatsAppService) {
+        log.info("Exibindo ajuda 'Entrar em Pelada' para {}", context.from)
+
+        ws.sendMessage(
+            context.from,
+            "*Como entrar em uma pelada*\n\n" +
+                "Recebeu um código? Basta enviar aqui no chat! Você vê os detalhes e confirma com um toque."
         )
+
+        sendNavigationButtons(context, ws)
+    }
+
+    private fun showPagar(context: CommandContext, ws: WhatsAppService) {
+        log.info("Exibindo ajuda 'Pagamentos' para {}", context.from)
+
+        ws.sendMessage(
+            context.from,
+            "*Pagamentos*\n\n" +
+                "Se a pelada for paga, você recebe um código PIX. Copie, cole no app do banco e pague. A confirmação é automática!"
+        )
+
+        sendNavigationButtons(context, ws)
+    }
+
+    private fun showOrganizador(context: CommandContext, ws: WhatsAppService) {
+        log.info("Exibindo ajuda 'Organizadores' para {}", context.from)
+
+        ws.sendMessage(
+            context.from,
+            "*Para organizadores*\n\n" +
+                "No painel de gerenciamento, você acompanha jogadores, confirma pagamentos, edita a pelada e solicita saque do saldo."
+        )
+
+        sendNavigationButtons(context, ws)
     }
 
     private fun showSuporte(context: CommandContext, ws: WhatsAppService) {
         log.info("Exibindo link de suporte para {}", context.from)
 
-        val deepLink = "https://wa.me/$SUPPORT_PHONE"
-
         ws.sendMessage(
             context.from,
-            buildString {
-                append("*Suporte BoJogar*\n\n")
-                append("Precisa de ajuda? Fale diretamente com a nossa equipe!\n\n")
-                append("Clique no link abaixo para iniciar uma conversa:\n")
-                append(deepLink)
-            }
+            "*Suporte BoJogar*\n\n" +
+                "Precisa de ajuda? Fale com a gente:\n\n" +
+                "https://wa.me/$SUPPORT_PHONE"
         )
 
         ws.sendButtons(
@@ -100,7 +120,18 @@ class AjudaCommand : BotCommand {
             body = "Mais alguma coisa?",
             buttons = listOf(
                 Button(id = "/ajuda", title = "Como Funciona"),
-                Button(id = "/start", title = "Menu Inicial")
+                Button(id = "/start", title = "Menu")
+            )
+        )
+    }
+
+    private fun sendNavigationButtons(context: CommandContext, ws: WhatsAppService) {
+        ws.sendButtons(
+            to = context.from,
+            body = "Quer saber mais sobre outro assunto?",
+            buttons = listOf(
+                Button(id = "/ajuda", title = "Ver Outro Tópico"),
+                Button(id = "/start", title = "Menu")
             )
         )
     }

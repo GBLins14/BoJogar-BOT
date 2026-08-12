@@ -4,6 +4,7 @@ import com.bojogar.bot.config.WhatsAppProperties
 import com.bojogar.bot.dto.request.UpdatePeladaRequest
 import com.bojogar.bot.service.*
 import com.bojogar.bot.util.PhoneUtils
+import com.bojogar.bot.whatsapp.UxCopy
 import com.bojogar.bot.whatsapp.command.BotCommand
 import com.bojogar.bot.whatsapp.command.CommandContext
 import com.bojogar.bot.whatsapp.model.Button
@@ -35,7 +36,6 @@ class GerenciarCommand(
 
     companion object {
         private val log = LoggerFactory.getLogger(GerenciarCommand::class.java)
-        private val DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
         private val MIN_PRICE = BigDecimal(10)
         private val MAX_PRICE = BigDecimal(100)
     }
@@ -66,13 +66,12 @@ class GerenciarCommand(
         val managed = authorizationService.getManagedPeladas(context.from)
 
         if (managed.isEmpty()) {
-            ws.sendMessage(context.from, "\u2699\uFE0F Você não gerencia nenhuma pelada no momento.")
             ws.sendButtons(
                 to = context.from,
-                body = "O que deseja fazer?",
+                body = "\uD83D\uDC51 Você não gerencia nenhuma pelada no momento.",
                 buttons = listOf(
                     Button(id = "/criar", title = "Criar Pelada"),
-                    Button(id = "/start", title = "Menu Inicial")
+                    Button(id = "/start", title = "Menu")
                 )
             )
             return
@@ -85,7 +84,7 @@ class GerenciarCommand(
 
         ws.sendList(
             to = context.from,
-            header = "\u2699\uFE0F Gerenciar Peladas",
+            header = "\uD83D\uDC51 Gerenciar Peladas",
             body = "Selecione a pelada que deseja gerenciar:",
             buttonLabel = "Ver Peladas",
             sections = listOf(
@@ -96,14 +95,13 @@ class GerenciarCommand(
                         if (pel != null) {
                             ListRow(
                                 id = "/gerenciar pelada ${p.peladaCodigo}",
-                                title = "${pel.esporteLabel} — ${p.peladaCodigo}",
-                                description = "${pel.local.take(25)} · ${p.role}"
+                                title = "${pel.esporteLabel} \u2014 ${p.peladaCodigo}",
+                                description = "${pel.local.take(25)} \u00B7 ${UxCopy.roleLabel(p.role)}"
                             )
                         } else null
                     }
                 )
-            ),
-            footer = "BoJogar"
+            )
         )
     }
 
@@ -119,7 +117,7 @@ class GerenciarCommand(
     }
 
     private fun showPeladaAdminFor(context: CommandContext, ws: WhatsAppService, code: String) {
-        log.info("Exibindo painel admin da pelada {} para {}", code, context.from)
+        log.info("Exibindo painel da pelada {} para {}", code, context.from)
         val pelada = peladaService.findByCode(code) ?: run {
             ws.sendMessage(context.from, "\u26A0\uFE0F Pelada *$code* não encontrada.")
             return
@@ -128,16 +126,12 @@ class GerenciarCommand(
         ws.sendMessage(
             context.from,
             buildString {
-                append("\u2699\uFE0F *Painel Admin — ${pelada.codigo}*\n\n")
+                append("\uD83D\uDC51 *Painel \u2014 $code*\n\n")
                 append("\uD83C\uDFC6 ${pelada.esporteLabel}\n")
                 append("\uD83D\uDCCD ${pelada.local}\n")
-                append("\uD83D\uDCC5 ${pelada.dataHora.format(DATE_FMT)}\n")
-                if (pelada.limiteJogadores == 0) {
-                    append("\uD83D\uDC65 ${pelada.confirmedCount} confirmados · Sem limite\n")
-                } else {
-                    append("\uD83D\uDC65 ${pelada.confirmedCount}/${pelada.limiteJogadores} · ${pelada.remainingSlots} vagas restantes\n")
-                }
-                append("\uD83D\uDCCA Status: *${pelada.status}*")
+                append("\uD83D\uDCC5 ${UxCopy.formatDate(pelada.dataHora)}\n")
+                append("\uD83D\uDC65 ${UxCopy.formatSlots(pelada.confirmedCount, pelada.limiteJogadores)} \u00B7 ${UxCopy.formatRemaining(pelada.remainingSlots, pelada.limiteJogadores)}\n")
+                append("\uD83D\uDCCA Status: *${UxCopy.statusPelada(pelada.status)}*")
             }
         )
 
@@ -146,7 +140,7 @@ class GerenciarCommand(
             ListSection(
                 title = "Gestão",
                 rows = listOf(
-                    ListRow(id = "/gerenciar participantes $code", title = "\uD83D\uDC65 Participantes", description = "${pelada.confirmedCount} confirmados"),
+                    ListRow(id = "/gerenciar participantes $code", title = "\uD83D\uDC65 Jogadores", description = "${pelada.confirmedCount} confirmados"),
                     ListRow(id = "/gerenciar financeiro $code", title = "\uD83D\uDCB0 Financeiro", description = "Pagamentos e saldo"),
                     ListRow(id = "/gerenciar convidar $code", title = "\uD83D\uDCE8 Convidar Amigos", description = "Gerar link de convite")
                 )
@@ -166,14 +160,13 @@ class GerenciarCommand(
             to = context.from,
             body = "Selecione uma opção:",
             buttonLabel = "Ver Opções",
-            sections = sections,
-            footer = "BoJogar"
+            sections = sections
         )
     }
 
     private fun showParticipantes(context: CommandContext, ws: WhatsAppService) {
         val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
-        log.info("Listando participantes da pelada {} por {}", code, context.from)
+        log.info("Listando jogadores da pelada {} por {}", code, context.from)
 
         if (!authorizationService.isAdminOrOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Sem permissão.")
@@ -183,10 +176,9 @@ class GerenciarCommand(
         val participants = participantService.getActiveParticipants(code)
 
         if (participants.isEmpty()) {
-            ws.sendMessage(context.from, "\uD83D\uDC65 Nenhum participante inscrito nesta pelada.")
             ws.sendButtons(
                 to = context.from,
-                body = "O que deseja fazer?",
+                body = "\uD83D\uDC65 Nenhum jogador inscrito nesta pelada.",
                 buttons = listOf(
                     Button(id = "/gerenciar convidar $code", title = "Convidar Amigos"),
                     Button(id = "/gerenciar pelada $code", title = "Voltar")
@@ -206,11 +198,12 @@ class GerenciarCommand(
                 ListSection(
                     title = "\u2705 Confirmados (${confirmed.size})",
                     rows = confirmed.take(10).map { p ->
-                        val roleLabel = if (p.role != "PLAYER") " [${p.role}]" else ""
+                        val roleIcon = UxCopy.roleShort(p.role)
+                        val nameDisplay = "${p.displayName ?: p.userName}${if (roleIcon.isNotEmpty()) " $roleIcon" else ""}"
                         ListRow(
                             id = "/gerenciar remover $code ${p.userPhone}",
-                            title = "${p.displayName ?: p.userName}$roleLabel",
-                            description = "${PhoneUtils.formatPhoneDisplay(p.userPhone)} · Pago"
+                            title = nameDisplay,
+                            description = "${PhoneUtils.formatPhoneDisplay(p.userPhone)} \u00B7 ${UxCopy.statusJogadorShort("CONFIRMED")}"
                         )
                     }
                 )
@@ -222,11 +215,12 @@ class GerenciarCommand(
                 ListSection(
                     title = "\u23F3 Pendentes (${pendingPayment.size})",
                     rows = pendingPayment.take(10).map { p ->
-                        val roleLabel = if (p.role != "PLAYER") " [${p.role}]" else ""
+                        val roleIcon = UxCopy.roleShort(p.role)
+                        val nameDisplay = "${p.displayName ?: p.userName}${if (roleIcon.isNotEmpty()) " $roleIcon" else ""}"
                         ListRow(
                             id = "/gerenciar remover $code ${p.userPhone}",
-                            title = "${p.displayName ?: p.userName}$roleLabel",
-                            description = "${PhoneUtils.formatPhoneDisplay(p.userPhone)} · Pendente"
+                            title = nameDisplay,
+                            description = "${PhoneUtils.formatPhoneDisplay(p.userPhone)} \u00B7 ${UxCopy.statusJogadorShort("PENDING_PAYMENT")}"
                         )
                     }
                 )
@@ -236,7 +230,7 @@ class GerenciarCommand(
         if (waitlisted.isNotEmpty()) {
             sections.add(
                 ListSection(
-                    title = "\uD83D\uDD52 Lista de Espera (${waitlisted.size})",
+                    title = "\uD83D\uDD52 Espera (${waitlisted.size})",
                     rows = waitlisted.take(10).map { p ->
                         ListRow(
                             id = "/gerenciar remover $code ${p.userPhone}",
@@ -250,11 +244,10 @@ class GerenciarCommand(
 
         ws.sendList(
             to = context.from,
-            header = "\uD83D\uDC65 Participantes — $code",
-            body = "${participants.size} participante(s) inscritos.\nSelecione um para gerenciar:",
+            header = "\uD83D\uDC65 Jogadores \u2014 $code",
+            body = "${participants.size} jogador(es) inscrito(s).\nSelecione um para gerenciar:",
             buttonLabel = "Ver Lista",
-            sections = sections,
-            footer = "BoJogar"
+            sections = sections
         )
     }
 
@@ -271,13 +264,13 @@ class GerenciarCommand(
         val target = participants.find { it.userPhone == phone }
 
         if (target == null) {
-            ws.sendMessage(context.from, "\u26A0\uFE0F Participante não encontrado.")
+            ws.sendMessage(context.from, "\u26A0\uFE0F Jogador não encontrado.")
             return
         }
 
         ws.sendButtons(
             to = context.from,
-            header = "Remover Participante",
+            header = "Remover Jogador",
             body = "\u26A0\uFE0F Deseja remover *${target.displayName ?: target.userName}* da pelada *$code*?\n\n_Essa ação não pode ser desfeita._",
             buttons = listOf(
                 Button(id = "/gerenciar remover_sim $code $phone", title = "Sim, Remover"),
@@ -289,12 +282,12 @@ class GerenciarCommand(
     private fun confirmarRemocao(context: CommandContext, ws: WhatsAppService) {
         val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
         val phone = context.args.getOrNull(2) ?: return showParticipantes(context, ws)
-        log.info("Removendo participante {} da pelada {} por {}", phone, code, context.from)
+        log.info("Removendo jogador {} da pelada {} por {}", phone, code, context.from)
 
         when (val result = participantService.removeParticipant(context.from, phone, code)) {
             is RemoveResult.Removed -> {
-                log.info("Participante {} removido da pelada {} com sucesso", phone, code)
-                ws.sendMessage(context.from, "\u2705 Participante removido com sucesso.")
+                log.info("Jogador {} removido da pelada {} com sucesso", phone, code)
+                ws.sendMessage(context.from, "\u2705 Jogador removido com sucesso.")
 
                 val pelada = peladaService.findByCode(code)
                 val removedParticipant = participantService.getParticipants(code).find { it.userPhone == phone }
@@ -313,17 +306,17 @@ class GerenciarCommand(
                     )
                 }
             }
-            is RemoveResult.NotFound -> ws.sendMessage(context.from, "\u26A0\uFE0F Participante não encontrado.")
+            is RemoveResult.NotFound -> ws.sendMessage(context.from, "\u26A0\uFE0F Jogador não encontrado.")
             is RemoveResult.Unauthorized -> ws.sendMessage(context.from, "\u274C Sem permissão.")
             is RemoveResult.Error -> ws.sendMessage(context.from, "\u274C Ocorreu um erro. Tente novamente mais tarde.")
         }
 
         ws.sendButtons(
             to = context.from,
-            body = "O que deseja fazer?",
+            body = "Gerenciar jogadores:",
             buttons = listOf(
-                Button(id = "/gerenciar participantes $code", title = "Ver Participantes"),
-                Button(id = "/gerenciar pelada $code", title = "Painel Admin")
+                Button(id = "/gerenciar participantes $code", title = "Ver Jogadores"),
+                Button(id = "/gerenciar pelada $code", title = "Painel")
             )
         )
     }
@@ -342,7 +335,7 @@ class GerenciarCommand(
         val target = participants.find { it.userPhone == phone }
 
         if (target == null) {
-            ws.sendMessage(context.from, "\u26A0\uFE0F Participante não encontrado.")
+            ws.sendMessage(context.from, "\u26A0\uFE0F Jogador não encontrado.")
             return
         }
 
@@ -359,10 +352,10 @@ class GerenciarCommand(
 
         ws.sendButtons(
             to = context.from,
-            body = "O que deseja fazer?",
+            body = "Próximos passos:",
             buttons = listOf(
                 Button(id = "/gerenciar financeiro $code", title = "Ver Financeiro"),
-                Button(id = "/gerenciar pelada $code", title = "Painel Admin")
+                Button(id = "/gerenciar pelada $code", title = "Painel")
             )
         )
     }
@@ -378,11 +371,10 @@ class GerenciarCommand(
 
         val pelada = peladaService.findByCode(code)
         if (pelada == null || pelada.valorPorJogador <= BigDecimal.ZERO) {
-            ws.sendMessage(context.from, "\uD83D\uDCB0 Esta pelada é gratuita — sem movimentação financeira.")
             ws.sendButtons(
                 to = context.from,
-                body = "Voltar:",
-                buttons = listOf(Button(id = "/gerenciar pelada $code", title = "Painel Admin"))
+                body = "\uD83D\uDCB0 Esta pelada é gratuita \u2014 sem movimentação financeira.",
+                buttons = listOf(Button(id = "/gerenciar pelada $code", title = "Painel"))
             )
             return
         }
@@ -396,7 +388,7 @@ class GerenciarCommand(
         ws.sendMessage(
             context.from,
             buildString {
-                append("\uD83D\uDCB0 *Financeiro — $code*\n\n")
+                append("\uD83D\uDCB0 *Financeiro \u2014 $code*\n\n")
                 append("\u2705 *Pagos:* $paid\n")
                 append("\u23F3 *Pendentes:* $pending\n")
                 append("\uD83D\uDCB5 *Total arrecadado:* R$ $totalCollected\n")
@@ -407,7 +399,7 @@ class GerenciarCommand(
                     append("\n")
                     payments.forEach { p ->
                         val icon = if (p.status == "CONFIRMADO") "\u2705" else "\u23F3"
-                        append("$icon ${p.participantName} — R$ ${p.valor}\n")
+                        append("$icon ${p.participantName} \u2014 R$ ${p.valor}\n")
                     }
                 }
             }
@@ -437,20 +429,19 @@ class GerenciarCommand(
                             ListRow(
                                 id = "/gerenciar confirmar_pgto $code ${p.userPhone}",
                                 title = p.displayName ?: p.userName,
-                                description = "R$ ${pelada.valorPorJogador} · Pendente"
+                                description = "R$ ${pelada.valorPorJogador} \u00B7 Pendente"
                             )
                         }
                     )
-                ),
-                footer = "BoJogar"
+                )
             )
         } else {
             ws.sendButtons(
                 to = context.from,
-                body = "O que deseja fazer?",
+                body = "Próximos passos:",
                 buttons = listOf(
                     Button(id = "/gerenciar saque $code", title = "Solicitar Saque"),
-                    Button(id = "/gerenciar pelada $code", title = "Painel Admin")
+                    Button(id = "/gerenciar pelada $code", title = "Painel")
                 )
             )
         }
@@ -473,14 +464,14 @@ class GerenciarCommand(
         ws.sendMessage(
             context.from,
             buildString {
-                append("\u270F\uFE0F *Editar Pelada — $code*\n\n")
+                append("\u270F\uFE0F *Editar Pelada \u2014 $code*\n\n")
                 append("1\uFE0F\u20E3 *Local:* ${pelada.local}\n")
-                append("2\uFE0F\u20E3 *Data:* ${pelada.dataHora.format(DATE_FMT)}\n")
+                append("2\uFE0F\u20E3 *Data:* ${UxCopy.formatDate(pelada.dataHora)}\n")
                 val limiteDisplay = if (pelada.limiteJogadores == 0) "Sem limite" else "${pelada.limiteJogadores} jogadores"
                 append("3\uFE0F\u20E3 *Limite:* $limiteDisplay\n")
-                append("4\uFE0F\u20E3 *Valor:* R$ ${pelada.valorPorJogador}\n")
-                append("5\uFE0F\u20E3 *Descrição:* ${pelada.descricao ?: "—"}\n")
-                append("6\uFE0F\u20E3 *Chave Pix:* ${pelada.chavePix ?: "—"}\n")
+                append("4\uFE0F\u20E3 *Valor:* ${UxCopy.formatPrice(pelada.valorPorJogador)}\n")
+                append("5\uFE0F\u20E3 *Descrição:* ${pelada.descricao ?: "\u2014"}\n")
+                append("6\uFE0F\u20E3 *Chave Pix:* ${pelada.chavePix ?: "\u2014"}\n")
             }
         )
 
@@ -493,15 +484,14 @@ class GerenciarCommand(
                     title = "Campos Editáveis",
                     rows = listOf(
                         ListRow(id = "/gerenciar editar_campo $code local", title = "\uD83D\uDCCD Local", description = pelada.local.take(30)),
-                        ListRow(id = "/gerenciar editar_campo $code dataHora", title = "\uD83D\uDCC5 Data e Horário", description = pelada.dataHora.format(DATE_FMT)),
+                        ListRow(id = "/gerenciar editar_campo $code dataHora", title = "\uD83D\uDCC5 Data e Horário", description = UxCopy.formatDate(pelada.dataHora)),
                         ListRow(id = "/gerenciar editar_campo $code limite", title = "\uD83D\uDC65 Limite de Jogadores", description = if (pelada.limiteJogadores == 0) "Sem limite" else "${pelada.limiteJogadores} jogadores"),
-                        ListRow(id = "/gerenciar editar_campo $code valor", title = "\uD83D\uDCB0 Valor por Jogador", description = "R$ ${pelada.valorPorJogador}"),
-                        ListRow(id = "/gerenciar editar_campo $code descricao", title = "\uD83D\uDCDD Descrição", description = (pelada.descricao ?: "—").take(30)),
-                        ListRow(id = "/gerenciar editar_campo $code chavePix", title = "\uD83D\uDCF2 Chave Pix", description = (pelada.chavePix ?: "—").take(30))
+                        ListRow(id = "/gerenciar editar_campo $code valor", title = "\uD83D\uDCB0 Valor por Jogador", description = UxCopy.formatPrice(pelada.valorPorJogador)),
+                        ListRow(id = "/gerenciar editar_campo $code descricao", title = "\uD83D\uDCDD Descrição", description = (pelada.descricao ?: "\u2014").take(30)),
+                        ListRow(id = "/gerenciar editar_campo $code chavePix", title = "\uD83D\uDCF2 Chave Pix", description = (pelada.chavePix ?: "\u2014").take(30))
                     )
                 )
-            ),
-            footer = "BoJogar"
+            )
         )
     }
 
@@ -523,7 +513,7 @@ class GerenciarCommand(
             val label = when (field) {
                 "local" -> "novo local"
                 "limite" -> "novo limite de jogadores _(ou 0 para sem limite)_"
-                "valor" -> "novo valor por jogador _(mín. R$ 10 · máx. R$ 100)_"
+                "valor" -> "novo valor por jogador _(mín. R$ 10 \u00B7 máx. R$ 100)_"
                 "descricao" -> "nova descrição"
                 "dataHora" -> "nova data e horário _(DD/MM HH:MM)_"
                 "chavePix" -> "nova chave Pix"
@@ -559,7 +549,7 @@ class GerenciarCommand(
                 "descricao" -> UpdatePeladaRequest(descricao = value)
                 "dataHora" -> {
                     val dateTime = parseDateTime(value)
-                        ?: throw IllegalArgumentException("Formato inválido. Use DD/MM HH:MM")
+                        ?: throw IllegalArgumentException("Não entendi a data. Use DD/MM HH:MM")
                     if (dateTime.isBefore(LocalDateTime.now())) {
                         throw IllegalArgumentException("A data precisa ser no futuro")
                     }
@@ -597,10 +587,10 @@ class GerenciarCommand(
 
         ws.sendButtons(
             to = context.from,
-            body = "O que deseja fazer?",
+            body = "Próximos passos:",
             buttons = listOf(
                 Button(id = "/gerenciar editar $code", title = "Editar Mais"),
-                Button(id = "/gerenciar pelada $code", title = "Painel Admin")
+                Button(id = "/gerenciar pelada $code", title = "Painel")
             )
         )
     }
@@ -620,7 +610,7 @@ class GerenciarCommand(
             header = "Cancelar Pelada",
             body = buildString {
                 append("\u26A0\uFE0F *Tem certeza?*\n\n")
-                append("Cancelar a pelada *$code* afetará *${participants.size}* participante(s).\n")
+                append("Cancelar a pelada *$code* afetará *${participants.size}* jogador(es).\n")
                 append("Todos serão notificados.\n\n")
                 append("_Esta ação não pode ser desfeita._")
             },
@@ -645,11 +635,11 @@ class GerenciarCommand(
             val pelada = peladaService.cancel(code, context.from)
 
             notificationService.notifyPeladaCancelled(pelada, participants)
-            log.info("Pelada {} cancelada por {} — {} participantes notificados", code, context.from, participants.size)
+            log.info("Pelada {} cancelada por {} \u2014 {} jogadores notificados", code, context.from, participants.size)
 
             ws.sendMessage(
                 context.from,
-                "\u274C *Pelada Cancelada*\n\nA pelada *$code* foi cancelada e *${participants.size}* participante(s) foram notificados."
+                "\u274C *Pelada Cancelada*\n\nA pelada *$code* foi cancelada e *${participants.size}* jogador(es) foram notificados."
             )
         } catch (e: Exception) {
             log.error("Error cancelling pelada {}: {}", code, e.message, e)
@@ -658,10 +648,10 @@ class GerenciarCommand(
 
         ws.sendButtons(
             to = context.from,
-            body = "O que deseja fazer?",
+            body = "Criar outra pelada?",
             buttons = listOf(
                 Button(id = "/criar", title = "Criar Pelada"),
-                Button(id = "/start", title = "Menu Inicial")
+                Button(id = "/start", title = "Menu")
             )
         )
     }
@@ -678,10 +668,9 @@ class GerenciarCommand(
         val walletBalance = pagamentoService.getWalletBalance(code)
 
         if (walletBalance <= BigDecimal.ZERO) {
-            ws.sendMessage(context.from, "\u26A0\uFE0F Você não tem saldo disponível para saque nesta pelada.")
             ws.sendButtons(
                 to = context.from,
-                body = "Voltar:",
+                body = "\u26A0\uFE0F Você não tem saldo disponível para saque nesta pelada.",
                 buttons = listOf(Button(id = "/gerenciar financeiro $code", title = "Ver Financeiro"))
             )
             return
@@ -694,7 +683,7 @@ class GerenciarCommand(
         ws.sendMessage(
             context.from,
             buildString {
-                append("\uD83D\uDCB3 *Solicitar Saque — $code*\n\n")
+                append("\uD83D\uDCB3 *Solicitar Saque \u2014 $code*\n\n")
                 append("\uD83D\uDCB0 *Saldo disponível:* R$ $walletBalance\n")
                 append("_(já descontadas as taxas da plataforma)_\n\n")
                 append("Clique no link abaixo para solicitar o saque:\n")
@@ -707,7 +696,7 @@ class GerenciarCommand(
             body = "Voltar:",
             buttons = listOf(
                 Button(id = "/gerenciar financeiro $code", title = "Ver Financeiro"),
-                Button(id = "/gerenciar pelada $code", title = "Painel Admin")
+                Button(id = "/gerenciar pelada $code", title = "Painel")
             )
         )
     }
@@ -743,23 +732,16 @@ class GerenciarCommand(
             return
         }
 
-        val deepLink = "https://wa.me/5581983868651?text=$code"
+        val botPhone = whatsAppProperties.phoneNumber.replace(Regex("[^0-9]"), "")
+        val deepLink = "https://wa.me/$botPhone?text=$code"
 
         val shareMessage = buildString {
             append("Bora jogar! Entra na pelada comigo! \uD83D\uDCAA\n\n")
             append("\uD83C\uDFC6 *${pelada.esporteLabel}*\n")
             append("\uD83D\uDCCD ${pelada.local}\n")
-            append("\uD83D\uDCC5 ${pelada.dataHora.format(DATE_FMT)}\n")
-            if (pelada.limiteJogadores == 0) {
-                append("\uD83D\uDC65 Vagas ilimitadas\n")
-            } else {
-                append("\uD83D\uDC65 ${pelada.remainingSlots} vagas restantes\n")
-            }
-            if (pelada.valorPorJogador > BigDecimal.ZERO) {
-                append("\uD83D\uDCB0 R$ ${pelada.valorPorJogador}\n")
-            } else {
-                append("\uD83D\uDCB0 Gratuita\n")
-            }
+            append("\uD83D\uDCC5 ${UxCopy.formatDate(pelada.dataHora)}\n")
+            append("\uD83D\uDC65 ${UxCopy.formatRemaining(pelada.remainingSlots, pelada.limiteJogadores)}\n")
+            append("\uD83D\uDCB0 ${UxCopy.formatPrice(pelada.valorPorJogador)}\n")
             append("\nPara participar, clique no link e envie a mensagem:\n$deepLink")
         }
 
@@ -771,10 +753,10 @@ class GerenciarCommand(
 
         ws.sendButtons(
             to = context.from,
-            body = "O que deseja fazer?",
+            body = "Próximos passos:",
             buttons = listOf(
-                Button(id = "/gerenciar pelada $code", title = "Painel Admin"),
-                Button(id = "/start", title = "Menu Inicial")
+                Button(id = "/gerenciar pelada $code", title = "Painel"),
+                Button(id = "/start", title = "Menu")
             )
         )
     }

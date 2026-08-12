@@ -34,58 +34,50 @@ class StartCommand(
         val managed = authorizationService.getManagedPeladas(context.from)
         val pendingPayments = pagamentoService.getUserPendingPayments(context.from)
 
-        val rows = mutableListOf(
-            ListRow(
-                id = "/entrar",
-                title = "\uD83D\uDD11 Entrar com Código",
-                description = "Participar de uma pelada existente"
-            ),
+        val jogarRows = mutableListOf(
             ListRow(
                 id = "/minhas proximas",
-                title = "\uD83D\uDCC5 Minhas Peladas",
-                description = "Ver inscrições e histórico"
+                title = "\uD83C\uDFDF\uFE0F Minhas Peladas",
+                description = "Inscrições e próximas peladas"
             ),
             ListRow(
                 id = "/criar",
                 title = "\u2795 Criar Pelada",
-                description = "Organizar uma nova pelada"
+                description = "Organize uma nova pelada"
+            ),
+            ListRow(
+                id = "/entrar",
+                title = "\uD83D\uDD11 Entrar com Código",
+                description = "Participar de uma pelada"
             )
         )
 
         if (pendingPayments.isNotEmpty()) {
-            rows.add(
+            jogarRows.add(
                 ListRow(
                     id = "/pagar",
-                    title = "\uD83D\uDCB0 Pagamentos Pendentes",
-                    description = "${pendingPayments.size} pagamento(s) aguardando"
+                    title = "\uD83D\uDCB0 Pagamentos (${pendingPayments.size})",
+                    description = "${pendingPayments.size} pagamento(s) pendente(s)"
                 )
             )
         }
 
         if (managed.isNotEmpty()) {
-            rows.add(
+            jogarRows.add(
                 ListRow(
                     id = "/gerenciar",
-                    title = "\u2699\uFE0F Gerenciar Peladas",
-                    description = "${managed.size} pelada(s) sob sua gestão"
+                    title = "\uD83D\uDC51 Gerenciar (${managed.size})",
+                    description = "Administrar suas peladas"
                 )
             )
         }
 
-        val contaRows = listOf(
+        val maisRows = listOf(
             ListRow(
                 id = "/conta",
                 title = "\uD83D\uDC64 Minha Conta",
-                description = "Perfil, saldo e inscrições"
+                description = "Perfil e histórico"
             ),
-            ListRow(
-                id = "/minhas historico",
-                title = "\uD83D\uDCCA Histórico",
-                description = "Peladas que você participou"
-            )
-        )
-
-        val helpRows = listOf(
             ListRow(
                 id = "/ajuda",
                 title = "\u2753 Como Funciona",
@@ -94,34 +86,25 @@ class StartCommand(
             ListRow(
                 id = "/ajuda suporte",
                 title = "\uD83D\uDCDE Suporte",
-                description = "Fale com a nossa equipe"
+                description = "Fale com a gente"
             )
         )
 
         whatsappService.sendList(
             to = context.from,
-            header = "\u26BD BoJogar",
-            body = buildString {
-                append("E aí, $nome! \uD83D\uDC4B\n\n")
-                append("Sou o *BoJogar*, seu assistente para organizar peladas.\n\n")
-                append("Crie, gerencie e participe de peladas de forma rápida e prática.")
-            },
-            buttonLabel = "Ver Opções",
+            header = "\uD83C\uDFDF\uFE0F BoJogar",
+            body = "E aí, $nome! \uD83D\uDC4B\n\nO que você quer fazer?",
+            buttonLabel = "Abrir Menu",
             sections = listOf(
                 ListSection(
-                    title = "Menu Principal",
-                    rows = rows
+                    title = "Jogar",
+                    rows = jogarRows
                 ),
                 ListSection(
-                    title = "Minha Conta",
-                    rows = contaRows
-                ),
-                ListSection(
-                    title = "Ajuda",
-                    rows = helpRows
+                    title = "Mais",
+                    rows = maisRows
                 )
-            ),
-            footer = "BoJogar | v2.0"
+            )
         )
     }
 }

@@ -9,6 +9,7 @@ import com.bojogar.bot.service.ParticipantService
 import com.bojogar.bot.service.PagamentoService
 import com.bojogar.bot.service.PeladaService
 import com.bojogar.bot.util.PhoneUtils
+import com.bojogar.bot.whatsapp.UxCopy
 import com.bojogar.bot.whatsapp.command.BotCommand
 import com.bojogar.bot.whatsapp.command.CommandContext
 import com.bojogar.bot.whatsapp.model.Button
@@ -19,8 +20,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
 import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @Component
 class MinhasPeladasCommand(
@@ -35,8 +34,6 @@ class MinhasPeladasCommand(
 
     companion object {
         private val log = LoggerFactory.getLogger(MinhasPeladasCommand::class.java)
-        private val DATE_FMT_SHORT = DateTimeFormatter.ofPattern("EEE dd/MM - HH'h'", Locale("pt", "BR"))
-        private val DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
     }
 
     override fun execute(context: CommandContext, whatsappService: WhatsAppService) {
@@ -61,9 +58,8 @@ class MinhasPeladasCommand(
             buttons = listOf(
                 Button(id = "/minhas proximas", title = "Próximas"),
                 Button(id = "/minhas historico", title = "Histórico"),
-                Button(id = "/start", title = "Menu Inicial")
-            ),
-            footer = "BoJogar"
+                Button(id = "/start", title = "Menu")
+            )
         )
     }
 
@@ -80,14 +76,13 @@ class MinhasPeladasCommand(
         }
 
         if (upcoming.isEmpty()) {
-            ws.sendMessage(context.from, "\uD83D\uDCC5 Você não está inscrito em nenhuma pelada no momento.")
             ws.sendButtons(
                 to = context.from,
-                body = "O que deseja fazer?",
+                body = "\uD83D\uDCC5 Você não está inscrito em nenhuma pelada no momento.",
                 buttons = listOf(
                     Button(id = "/entrar", title = "Entrar com Código"),
                     Button(id = "/criar", title = "Criar Pelada"),
-                    Button(id = "/start", title = "Menu Inicial")
+                    Button(id = "/start", title = "Menu")
                 )
             )
             return
@@ -107,8 +102,8 @@ class MinhasPeladasCommand(
                         val pel = peladaMap[p.peladaCodigo] ?: return@mapNotNull null
                         ListRow(
                             id = "/minhas ver ${p.peladaCodigo}",
-                            title = "${pel.esporteLabel} — ${pel.local.take(20)}",
-                            description = "${pel.dataHora.format(DATE_FMT_SHORT)} · Confirmado"
+                            title = "${pel.esporteLabel} \u2014 ${pel.local.take(20)}",
+                            description = "${UxCopy.formatDateCompact(pel.dataHora)} \u00B7 ${UxCopy.statusJogadorShort("CONFIRMED")}"
                         )
                     }
                 )
@@ -123,8 +118,8 @@ class MinhasPeladasCommand(
                         val pel = peladaMap[p.peladaCodigo] ?: return@mapNotNull null
                         ListRow(
                             id = "/minhas ver ${p.peladaCodigo}",
-                            title = "${pel.esporteLabel} — ${pel.local.take(20)}",
-                            description = "${pel.dataHora.format(DATE_FMT_SHORT)} · Pagar"
+                            title = "${pel.esporteLabel} \u2014 ${pel.local.take(20)}",
+                            description = "${UxCopy.formatDateCompact(pel.dataHora)} \u00B7 ${UxCopy.statusJogadorShort("PENDING_PAYMENT")}"
                         )
                     }
                 )
@@ -134,13 +129,13 @@ class MinhasPeladasCommand(
         if (waitlisted.isNotEmpty()) {
             sections.add(
                 ListSection(
-                    title = "\uD83D\uDD52 Lista de Espera (${waitlisted.size})",
+                    title = "\uD83D\uDD52 Espera (${waitlisted.size})",
                     rows = waitlisted.take(10).mapNotNull { p ->
                         val pel = peladaMap[p.peladaCodigo] ?: return@mapNotNull null
                         ListRow(
                             id = "/minhas ver ${p.peladaCodigo}",
-                            title = "${pel.esporteLabel} — ${pel.local.take(20)}",
-                            description = "${pel.dataHora.format(DATE_FMT_SHORT)} · Posição #${p.waitlistPosition ?: "?"}"
+                            title = "${pel.esporteLabel} \u2014 ${pel.local.take(20)}",
+                            description = "${UxCopy.formatDateCompact(pel.dataHora)} \u00B7 Posição #${p.waitlistPosition ?: "?"}"
                         )
                     }
                 )
@@ -152,8 +147,7 @@ class MinhasPeladasCommand(
             header = "\uD83D\uDCC5 Próximas Peladas",
             body = "Você tem *${upcoming.size}* pelada(s) agendada(s):",
             buttonLabel = "Ver Peladas",
-            sections = sections,
-            footer = "BoJogar"
+            sections = sections
         )
     }
 
@@ -174,20 +168,19 @@ class MinhasPeladasCommand(
         val participants = participantService.getParticipants(codigo)
         val normalized = PhoneUtils.normalizePhone(context.from)
         val myParticipation = participants.find { it.userPhone == normalized }
-        val statusLabel = when (myParticipation?.status) {
-            "CONFIRMED" -> "\u2705 Confirmado"
-            "PENDING_PAYMENT" -> "\u23F3 Aguardando Pagamento"
-            "WAITLIST" -> "\uD83D\uDD52 Lista de Espera"
-            else -> "\u2796 Não inscrito"
+        val statusLabel = if (myParticipation != null) {
+            UxCopy.statusJogador(myParticipation.status)
+        } else {
+            "\u2796 Não inscrito"
         }
 
         ws.sendMessage(
             context.from,
             buildString {
-                append("\uD83D\uDCCB *Minha Inscrição — $codigo*\n\n")
-                append("\uD83C\uDFC6 *Pelada:* ${pelada.esporteLabel} — ${pelada.local}\n")
-                append("\uD83D\uDCC5 *Data:* ${pelada.dataHora.format(DATE_FMT)}\n")
-                append("\uD83D\uDCB0 *Valor:* ${if (pelada.valorPorJogador > BigDecimal.ZERO) "R$ ${pelada.valorPorJogador}" else "Gratuita"}\n")
+                append("\uD83D\uDCCB *Minha Inscrição \u2014 $codigo*\n\n")
+                append("\uD83C\uDFC6 *Pelada:* ${pelada.esporteLabel} \u2014 ${pelada.local}\n")
+                append("\uD83D\uDCC5 *Data:* ${UxCopy.formatDate(pelada.dataHora)}\n")
+                append("\uD83D\uDCB0 *Valor:* ${UxCopy.formatPrice(pelada.valorPorJogador)}\n")
                 append("\uD83D\uDCCA *Status:* $statusLabel")
             }
         )
@@ -208,9 +201,9 @@ class MinhasPeladasCommand(
             buttons.add(Button(id = "/minhas cancelar $codigo", title = "Cancelar Inscrição"))
         }
         if (buttons.size < 3) buttons.add(Button(id = "/minhas proximas", title = "Voltar"))
-        if (buttons.size < 3) buttons.add(Button(id = "/start", title = "Menu Inicial"))
+        if (buttons.size < 3) buttons.add(Button(id = "/start", title = "Menu"))
 
-        ws.sendButtons(to = context.from, body = "O que deseja fazer?", buttons = buttons.take(3))
+        ws.sendButtons(to = context.from, body = "Escolha uma ação:", buttons = buttons.take(3))
     }
 
     private fun showCancelar(context: CommandContext, ws: WhatsAppService) {
@@ -258,10 +251,10 @@ class MinhasPeladasCommand(
 
         ws.sendButtons(
             to = context.from,
-            body = "O que deseja fazer?",
+            body = "Quer participar de outra pelada?",
             buttons = listOf(
                 Button(id = "/entrar", title = "Entrar com Código"),
-                Button(id = "/start", title = "Menu Inicial")
+                Button(id = "/start", title = "Menu")
             )
         )
     }
@@ -290,8 +283,7 @@ class MinhasPeladasCommand(
                     past.take(10).forEachIndexed { i, p ->
                         val pel = peladaMap[p.peladaCodigo] ?: return@forEachIndexed
                         val icon = if (p.status == "CONFIRMED") "\u2705" else "\u274C"
-                        val price = if (pel.valorPorJogador > BigDecimal.ZERO) "R$ ${pel.valorPorJogador}" else "Gratuita"
-                        append("${i + 1}. $icon ${pel.esporteLabel} — ${pel.local.take(15)} · ${pel.dataHora.format(DateTimeFormatter.ofPattern("dd/MM"))} · $price\n")
+                        append("${i + 1}. $icon ${pel.esporteLabel} \u2014 ${pel.local.take(15)} \u00B7 ${UxCopy.formatDateCompact(pel.dataHora)} \u00B7 ${UxCopy.formatPrice(pel.valorPorJogador)}\n")
                     }
                     append("\n_Total: ${past.size} pelada(s)_")
                 }
@@ -300,10 +292,10 @@ class MinhasPeladasCommand(
 
         ws.sendButtons(
             to = context.from,
-            body = "O que deseja fazer?",
+            body = "Mais alguma coisa?",
             buttons = listOf(
                 Button(id = "/minhas proximas", title = "Próximas Peladas"),
-                Button(id = "/start", title = "Menu Inicial")
+                Button(id = "/start", title = "Menu")
             )
         )
     }

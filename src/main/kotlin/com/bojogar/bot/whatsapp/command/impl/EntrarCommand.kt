@@ -3,6 +3,7 @@ package com.bojogar.bot.whatsapp.command.impl
 import com.bojogar.bot.service.JoinResult
 import com.bojogar.bot.service.ParticipantService
 import com.bojogar.bot.service.PeladaService
+import com.bojogar.bot.whatsapp.UxCopy
 import com.bojogar.bot.whatsapp.command.BotCommand
 import com.bojogar.bot.whatsapp.command.CommandContext
 import com.bojogar.bot.whatsapp.model.Button
@@ -10,7 +11,6 @@ import com.bojogar.bot.whatsapp.service.WhatsAppService
 import com.bojogar.bot.whatsapp.session.SessionManager
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.time.format.DateTimeFormatter
 
 @Component
 class EntrarCommand(
@@ -24,7 +24,6 @@ class EntrarCommand(
 
     companion object {
         private val log = LoggerFactory.getLogger(EntrarCommand::class.java)
-        private val DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
     }
 
     override fun execute(context: CommandContext, whatsappService: WhatsAppService) {
@@ -53,13 +52,12 @@ class EntrarCommand(
         val pelada = peladaService.findByCode(code)
         if (pelada == null) {
             log.info("Pelada {} não encontrada", code)
-            ws.sendMessage(context.from, "\u26A0\uFE0F Pelada *$code* não encontrada. Verifique o código e tente novamente.")
             ws.sendButtons(
                 to = context.from,
-                body = "O que deseja fazer?",
+                body = "\u26A0\uFE0F Pelada *$code* não encontrada.\nVerifique o código e tente novamente.",
                 buttons = listOf(
                     Button(id = "/entrar", title = "Tentar Novamente"),
-                    Button(id = "/start", title = "Menu Inicial")
+                    Button(id = "/start", title = "Menu")
                 )
             )
             return
@@ -68,19 +66,14 @@ class EntrarCommand(
         ws.sendMessage(
             context.from,
             buildString {
-                append("\uD83C\uDFC6 *${pelada.esporteLabel} — ${pelada.codigo}*\n\n")
+                append("\uD83C\uDFC6 *${pelada.esporteLabel} \u2014 ${pelada.codigo}*\n\n")
                 if (!pelada.descricao.isNullOrBlank()) append("\uD83D\uDCDD ${pelada.descricao}\n\n")
                 append("\uD83D\uDCCD *Local:* ${pelada.local}\n")
-                append("\uD83D\uDCC5 *Data:* ${pelada.dataHora.format(DATE_FMT)}\n")
-                if (pelada.limiteJogadores == 0) {
-                    append("\uD83D\uDC65 *Vagas:* Ilimitadas\n")
-                } else {
-                    append("\uD83D\uDC65 *Vagas:* ${pelada.remainingSlots}/${pelada.limiteJogadores} restantes\n")
-                }
-                if (pelada.valorPorJogador > java.math.BigDecimal.ZERO) {
-                    append("\uD83D\uDCB0 *Valor:* R$ ${pelada.valorPorJogador}\n")
-                } else {
-                    append("\uD83D\uDCB0 *Valor:* Gratuita\n")
+                append("\uD83D\uDCC5 *Data:* ${UxCopy.formatDate(pelada.dataHora)}\n")
+                append("\uD83D\uDC65 *Vagas:* ${UxCopy.formatRemaining(pelada.remainingSlots, pelada.limiteJogadores)}\n")
+                append("\uD83D\uDCB0 *Valor:* ${UxCopy.formatPrice(pelada.valorPorJogador)}")
+                if (!pelada.createdByName.isNullOrBlank()) {
+                    append("\n\uD83D\uDC64 *Organizador:* ${pelada.createdByName}")
                 }
             }
         )
@@ -90,7 +83,7 @@ class EntrarCommand(
             body = "Deseja participar desta pelada?",
             buttons = listOf(
                 Button(id = "/entrar ${pelada.codigo} confirmar", title = "Participar"),
-                Button(id = "/start", title = "Menu Inicial")
+                Button(id = "/start", title = "Menu")
             )
         )
     }
@@ -105,18 +98,18 @@ class EntrarCommand(
                     context.from,
                     buildString {
                         append("\u2705 *Inscrição Confirmada!*\n\n")
-                        append("Você está na pelada *${pelada.codigo}* — ${pelada.esporteLabel}\n\n")
+                        append("Você está na pelada *${pelada.codigo}* \u2014 ${pelada.esporteLabel}\n\n")
                         append("\uD83D\uDCCD ${pelada.local}\n")
-                        append("\uD83D\uDCC5 ${pelada.dataHora.format(DATE_FMT)}\n\n")
+                        append("\uD83D\uDCC5 ${UxCopy.formatDate(pelada.dataHora)}\n\n")
                         append("Te vemos lá! \uD83D\uDCAA")
                     }
                 )
                 ws.sendButtons(
                     to = context.from,
-                    body = "O que deseja fazer?",
+                    body = "Sua vaga está garantida!",
                     buttons = listOf(
                         Button(id = "/minhas proximas", title = "Minhas Peladas"),
-                        Button(id = "/start", title = "Menu Inicial")
+                        Button(id = "/start", title = "Menu")
                     )
                 )
             }
@@ -127,10 +120,10 @@ class EntrarCommand(
                     context.from,
                     buildString {
                         append("\uD83D\uDCB0 *Pagamento Necessário*\n\n")
-                        append("Pelada *${pelada.codigo}* — ${pelada.esporteLabel}\n\n")
+                        append("Pelada *${pelada.codigo}* \u2014 ${pelada.esporteLabel}\n\n")
                         append("\uD83D\uDCCD ${pelada.local}\n")
-                        append("\uD83D\uDCC5 ${pelada.dataHora.format(DATE_FMT)}\n\n")
-                        append("\uD83D\uDCB5 *Valor:* R$ ${pelada.valorPorJogador}\n\n")
+                        append("\uD83D\uDCC5 ${UxCopy.formatDate(pelada.dataHora)}\n\n")
+                        append("\uD83D\uDCB5 *Valor:* ${UxCopy.formatPrice(pelada.valorPorJogador)}\n\n")
                         append("_Sua vaga só será garantida após o pagamento._")
                     }
                 )
@@ -140,7 +133,7 @@ class EntrarCommand(
                     buttons = listOf(
                         Button(id = "/pagar gerar ${pelada.codigo}", title = "Pagar via PIX"),
                         Button(id = "/minhas proximas", title = "Minhas Peladas"),
-                        Button(id = "/start", title = "Menu Inicial")
+                        Button(id = "/start", title = "Menu")
                     )
                 )
             }
@@ -157,46 +150,43 @@ class EntrarCommand(
                 )
                 ws.sendButtons(
                     to = context.from,
-                    body = "O que deseja fazer?",
+                    body = "Enquanto isso:",
                     buttons = listOf(
                         Button(id = "/minhas proximas", title = "Minhas Peladas"),
-                        Button(id = "/start", title = "Menu Inicial")
+                        Button(id = "/start", title = "Menu")
                     )
                 )
             }
             is JoinResult.AlreadyJoined -> {
                 log.info("Já inscrito: {} na pelada {}", context.from, code)
-                ws.sendMessage(context.from, "\u26A0\uFE0F Você já está inscrito nesta pelada!")
                 ws.sendButtons(
                     to = context.from,
-                    body = "O que deseja fazer?",
+                    body = "\u26A0\uFE0F Você já está inscrito nesta pelada!",
                     buttons = listOf(
                         Button(id = "/minhas ver $code", title = "Ver Inscrição"),
-                        Button(id = "/start", title = "Menu Inicial")
+                        Button(id = "/start", title = "Menu")
                     )
                 )
             }
             is JoinResult.PeladaClosed -> {
                 log.info("Pelada {} fechada para inscrições, tentativa de {}", code, context.from)
-                ws.sendMessage(context.from, "\u274C Esta pelada não está aberta para inscrições.")
                 ws.sendButtons(
                     to = context.from,
-                    body = "O que deseja fazer?",
+                    body = "\u274C Esta pelada não está aberta para inscrições.",
                     buttons = listOf(
                         Button(id = "/entrar", title = "Tentar Outro Código"),
-                        Button(id = "/start", title = "Menu Inicial")
+                        Button(id = "/start", title = "Menu")
                     )
                 )
             }
             is JoinResult.Error -> {
                 log.error("Error joining pelada {}: {}", code, result.message)
-                ws.sendMessage(context.from, "\u274C Ocorreu um erro. Tente novamente mais tarde.")
                 ws.sendButtons(
                     to = context.from,
-                    body = "O que deseja fazer?",
+                    body = "\u274C Ocorreu um erro. Tente novamente mais tarde.",
                     buttons = listOf(
                         Button(id = "/entrar $code confirmar", title = "Tentar Novamente"),
-                        Button(id = "/start", title = "Menu Inicial")
+                        Button(id = "/start", title = "Menu")
                     )
                 )
             }

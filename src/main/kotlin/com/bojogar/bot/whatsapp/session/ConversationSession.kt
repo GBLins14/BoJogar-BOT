@@ -10,7 +10,7 @@ data class ConversationSession(
     val createdAt: Instant = Instant.now()
 ) {
     companion object {
-        private const val TTL_SECONDS = 300L // 5 minutes
+        private const val TTL_SECONDS = 1800L // 30 minutes
     }
 
     fun isExpired(): Boolean = Instant.now().epochSecond - createdAt.epochSecond > TTL_SECONDS

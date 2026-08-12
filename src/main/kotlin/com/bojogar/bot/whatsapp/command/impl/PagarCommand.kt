@@ -46,15 +46,7 @@ class PagarCommand(
         val pending = pagamentoService.getUserPendingPayments(context.from)
 
         if (pending.isEmpty()) {
-            ws.sendMessage(context.from, "\u2705 Você não tem pagamentos pendentes!")
-            ws.sendButtons(
-                to = context.from,
-                body = "O que deseja fazer?",
-                buttons = listOf(
-                    Button(id = "/minhas proximas", title = "Minhas Peladas"),
-                    Button(id = "/start", title = "Menu Inicial")
-                )
-            )
+            sendNoPendingPayments(context, ws)
             return
         }
 
@@ -68,15 +60,7 @@ class PagarCommand(
         }
 
         if (peladasWithPending.isEmpty()) {
-            ws.sendMessage(context.from, "\u2705 Você não tem pagamentos pendentes!")
-            ws.sendButtons(
-                to = context.from,
-                body = "O que deseja fazer?",
-                buttons = listOf(
-                    Button(id = "/minhas proximas", title = "Minhas Peladas"),
-                    Button(id = "/start", title = "Menu Inicial")
-                )
-            )
+            sendNoPendingPayments(context, ws)
             return
         }
 
@@ -102,8 +86,7 @@ class PagarCommand(
                         )
                     }
                 )
-            ),
-            footer = "BoJogar"
+            )
         )
     }
 
@@ -119,13 +102,12 @@ class PagarCommand(
         val payment = pagamentoService.findPendingPaymentForUser(context.from, code)
 
         if (payment == null) {
-            ws.sendMessage(context.from, "\u2705 Você não tem pagamento pendente para a pelada *$code*.")
             ws.sendButtons(
                 to = context.from,
-                body = "O que deseja fazer?",
+                body = "\u2705 Você não tem pagamento pendente para a pelada *$code*.\n\nMais alguma coisa?",
                 buttons = listOf(
                     Button(id = "/minhas proximas", title = "Minhas Peladas"),
-                    Button(id = "/start", title = "Menu Inicial")
+                    Button(id = "/start", title = "Menu")
                 )
             )
             return
@@ -149,7 +131,7 @@ class PagarCommand(
                 body = "Após o pagamento, a confirmação é automática!",
                 buttons = listOf(
                     Button(id = "/minhas proximas", title = "Minhas Peladas"),
-                    Button(id = "/start", title = "Menu Inicial")
+                    Button(id = "/start", title = "Menu")
                 )
             )
         } else {
@@ -169,7 +151,7 @@ class PagarCommand(
                 buttons = listOf(
                     Button(id = "/pagar gerar $code", title = "Gerar PIX"),
                     Button(id = "/minhas proximas", title = "Minhas Peladas"),
-                    Button(id = "/start", title = "Menu Inicial")
+                    Button(id = "/start", title = "Menu")
                 )
             )
         }
@@ -284,22 +266,32 @@ class PagarCommand(
                     body = "Após o pagamento, a confirmação é automática!",
                     buttons = listOf(
                         Button(id = "/minhas proximas", title = "Minhas Peladas"),
-                        Button(id = "/start", title = "Menu Inicial")
+                        Button(id = "/start", title = "Menu")
                     )
                 )
             }
             is PixGenerationResult.Error -> {
                 log.error("Erro ao gerar PIX para {} na pelada {}: {}", context.from, code, result.message)
-                ws.sendMessage(context.from, "\u274C Erro ao gerar o PIX. Tente novamente.")
                 ws.sendButtons(
                     to = context.from,
-                    body = "O que deseja fazer?",
+                    body = "\u274C Erro ao gerar o PIX. Tente novamente ou volte ao menu.",
                     buttons = listOf(
                         Button(id = "/pagar gerar $code", title = "Tentar Novamente"),
-                        Button(id = "/start", title = "Menu Inicial")
+                        Button(id = "/start", title = "Menu")
                     )
                 )
             }
         }
+    }
+
+    private fun sendNoPendingPayments(context: CommandContext, ws: WhatsAppService) {
+        ws.sendButtons(
+            to = context.from,
+            body = "\u2705 Você não tem pagamentos pendentes!\n\nMais alguma coisa?",
+            buttons = listOf(
+                Button(id = "/minhas proximas", title = "Minhas Peladas"),
+                Button(id = "/start", title = "Menu")
+            )
+        )
     }
 }

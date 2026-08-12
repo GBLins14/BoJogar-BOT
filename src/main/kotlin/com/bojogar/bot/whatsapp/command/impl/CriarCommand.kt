@@ -3,6 +3,7 @@ package com.bojogar.bot.whatsapp.command.impl
 import com.bojogar.bot.dto.request.CreatePeladaRequest
 import com.bojogar.bot.enums.Esporte
 import com.bojogar.bot.service.PeladaService
+import com.bojogar.bot.whatsapp.UxCopy
 import com.bojogar.bot.whatsapp.command.BotCommand
 import com.bojogar.bot.whatsapp.command.CommandContext
 import com.bojogar.bot.whatsapp.model.Button
@@ -28,7 +29,6 @@ class CriarCommand(
 
     companion object {
         private val log = LoggerFactory.getLogger(CriarCommand::class.java)
-        private val DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM HH:mm")
         private val DATE_FORMATTER_FULL = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
         private val MIN_PRICE = BigDecimal(10)
         private val MAX_PRICE = BigDecimal(100)
@@ -40,7 +40,6 @@ class CriarCommand(
         when {
             sub == null -> startCreation(context, whatsappService)
             sub.startsWith("input_") -> handleInput(context, whatsappService, sub.removePrefix("input_"))
-            sub == "esporte" -> selectSport(context, whatsappService)
             sub == "confirmar" -> confirm(context, whatsappService)
             sub == "cancelar" -> cancelCreation(context, whatsappService)
             sub in Esporte.entries.map { it.name } -> handleSportSelected(context, whatsappService, sub)
@@ -49,39 +48,46 @@ class CriarCommand(
         }
     }
 
+    // ── Passo 1: Esporte ────────────────────────────────────
+
     private fun startCreation(context: CommandContext, ws: WhatsAppService) {
         log.info("Iniciando criação de pelada para {} ({})", context.senderName, context.from)
         sessionManager.startCreatingPelada(context.from)
-        selectSport(context, ws)
-    }
 
-    private fun selectSport(context: CommandContext, ws: WhatsAppService) {
         ws.sendButtons(
             to = context.from,
-            header = "\u2795 Nova Pelada",
-            body = "Qual o esporte da pelada?",
-            buttons = Esporte.entries.map { Button(id = "/criar ${it.name}", title = it.label) },
-            footer = "Passo 1 de 6"
+            body = "*(1/6)* Bora criar sua pelada! \u26BD\n\nQual o esporte?",
+            buttons = Esporte.entries.map { Button(id = "/criar ${it.name}", title = it.display) }
         )
     }
 
+    // ── Passo 2: Nome/Descrição ──────────────────────────────
+
     private fun handleSportSelected(context: CommandContext, ws: WhatsAppService, sport: String) {
+        val esporte = runCatching { Esporte.valueOf(sport) }.getOrNull()
         log.info("Esporte selecionado: {} por {}", sport, context.from)
+
         if (sessionManager.getSession(context.from) == null) {
             sessionManager.startCreatingPelada(context.from)
         }
         sessionManager.updateSession(context.from, "esporte", sport, "descricao")
+
         ws.sendButtons(
             to = context.from,
-            body = "\uD83D\uDCDD *Descrição da pelada*\n\nDigite uma breve descrição.\n_Ex: Pelada de quarta na praia_",
-            buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar")),
-            footer = "Passo 2 de 6"
+            body = "*(2/6)* ${esporte?.display ?: sport} selecionado!\n\nDê um nome para sua pelada _(opcional)_\n_Ex: Pelada de quinta, Rachão do Boa Vista_",
+            buttons = listOf(
+                Button(id = "/criar input_descricao _skip_", title = "Pular"),
+                Button(id = "/criar cancelar", title = "\u274C Cancelar")
+            )
         )
     }
 
+    // ── Passos 3-6: Local, Data, Jogadores, Valor ─────────────
+
     private fun handleInput(context: CommandContext, ws: WhatsAppService, field: String) {
-        log.info("Input recebido campo=[{}] valor=\"{}\" de {}", field, context.args.drop(1).joinToString(" "), context.from)
         val value = context.args.drop(1).joinToString(" ")
+        log.info("Input campo=[{}] de {}", field, context.from)
+
         val session = sessionManager.getSession(context.from) ?: run {
             startCreation(context, ws)
             return
@@ -89,110 +95,104 @@ class CriarCommand(
 
         when (field) {
             "descricao" -> {
-                sessionManager.updateSession(context.from, "descricao", value, "local")
+                val desc = if (value == "_skip_" || value.isBlank()) "" else value
+                sessionManager.updateSession(context.from, "descricao", desc, "local")
+                val confirmMsg = if (desc.isNotBlank()) "\uD83D\uDCDD *$desc*\n\n" else ""
                 ws.sendButtons(
                     to = context.from,
-                    body = "\uD83D\uDCCD *Local da pelada*\n\nDigite o endereço ou nome do local.\n_Ex: Quadra Arena Beach — Boa Viagem_",
-                    buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar")),
-                    footer = "Passo 3 de 6"
+                    body = "*(3/6)* ${confirmMsg}Onde vai ser a pelada?\n_Ex: Arena Beach \u2014 Boa Viagem_",
+                    buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar"))
                 )
             }
+
             "local" -> {
+                if (value.length < 5) {
+                    ws.sendMessage(context.from, "\u26A0\uFE0F O local precisa ter pelo menos 5 caracteres.\n_Ex: Arena Beach \u2014 Boa Viagem_")
+                    return
+                }
                 sessionManager.updateSession(context.from, "local", value, "dataHora")
                 ws.sendButtons(
                     to = context.from,
-                    body = "\uD83D\uDCC5 *Data e horário*\n\nDigite no formato *DD/MM HH:MM*\n_Ex: 15/08 19:00_",
-                    buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar")),
-                    footer = "Passo 4 de 6"
+                    body = "*(4/6)* \uD83D\uDCCD $value\n\nQuando vai rolar?\n_Digite no formato DD/MM HH:MM_\n_Ex: 15/08 19:00_",
+                    buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar"))
                 )
             }
+
             "dataHora" -> {
                 val dateTime = parseDateTime(value)
                 if (dateTime == null) {
-                    ws.sendMessage(
-                        context.from,
-                        "\u26A0\uFE0F Formato inválido. Use *DD/MM HH:MM*\n_Ex: 15/08 19:00_"
-                    )
+                    ws.sendMessage(context.from, "\u26A0\uFE0F Não entendi a data.\n\nUse o formato *DD/MM HH:MM*\n_Ex: 15/08 19:00_")
                     return
                 }
                 if (dateTime.isBefore(LocalDateTime.now())) {
-                    ws.sendMessage(
-                        context.from,
-                        "\u26A0\uFE0F A data precisa ser no futuro. Tente novamente."
-                    )
+                    ws.sendMessage(context.from, "\u26A0\uFE0F Essa data já passou. Digite uma data futura.")
                     return
                 }
                 sessionManager.updateSession(context.from, "dataHora", dateTime.toString(), "maxPlayers")
+
                 ws.sendList(
                     to = context.from,
-                    body = "\uD83D\uDC65 *Quantos jogadores?*\n\nEscolha o limite de vagas para a pelada.",
+                    body = "*(5/6)* \uD83D\uDCC5 ${UxCopy.formatDate(dateTime)}\n\nQuantas pessoas podem jogar?",
                     buttonLabel = "Escolher",
                     sections = listOf(
                         ListSection(
-                            title = "Limite de Jogadores",
+                            title = "Vagas",
                             rows = listOf(
-                                ListRow(id = "/criar jogadores 4", title = "4 jogadores"),
                                 ListRow(id = "/criar jogadores 6", title = "6 jogadores"),
                                 ListRow(id = "/criar jogadores 8", title = "8 jogadores"),
                                 ListRow(id = "/criar jogadores 10", title = "10 jogadores"),
                                 ListRow(id = "/criar jogadores 12", title = "12 jogadores"),
+                                ListRow(id = "/criar jogadores 14", title = "14 jogadores"),
                                 ListRow(id = "/criar jogadores 16", title = "16 jogadores"),
                                 ListRow(id = "/criar jogadores 20", title = "20 jogadores"),
-                                ListRow(id = "/criar jogadores 0", title = "Sem limite", description = "Sem restrição de vagas"),
-                                ListRow(id = "/criar jogadores custom", title = "Personalizado", description = "Digitar quantidade")
+                                ListRow(id = "/criar jogadores 0", title = "Sem limite"),
+                                ListRow(id = "/criar jogadores custom", title = "Outro", description = "Digitar quantidade")
                             )
                         )
-                    ),
-                    footer = "Passo 4 de 6"
+                    )
                 )
             }
+
             "maxPlayers" -> {
                 val max = value.toIntOrNull()
                 if (max == null || (max != 0 && max < 2)) {
-                    ws.sendMessage(context.from, "\u26A0\uFE0F Número inválido. Mínimo de 2 jogadores.")
+                    ws.sendMessage(context.from, "\u26A0\uFE0F Mínimo de 2 jogadores. Tente novamente.")
                     return
                 }
                 sessionManager.updateSession(context.from, "maxPlayers", max.toString(), "price")
-                ws.sendButtons(
-                    to = context.from,
-                    body = "\uD83D\uDCB0 *Valor por jogador*\n\nDigite o valor em reais.\n_Ex: 25_\n\nDigite *0* para pelada gratuita.\n_Mínimo R$ 10 · Máximo R$ 100_",
-                    buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar")),
-                    footer = "Passo 5 de 6"
-                )
+                askPrice(context, ws)
             }
+
             "price" -> {
                 val price = value.replace(",", ".").toBigDecimalOrNull()
                 if (price == null || price < BigDecimal.ZERO) {
-                    ws.sendMessage(context.from, "\u26A0\uFE0F Valor inválido. Digite um número.\n_Ex: 25 ou 0 para gratuita_")
+                    ws.sendMessage(context.from, "\u26A0\uFE0F Não entendi. Digite um número.\n_Ex: 25 ou 0 para gratuita_")
                     return
                 }
                 if (price > BigDecimal.ZERO && price < MIN_PRICE) {
-                    ws.sendMessage(context.from, "\u26A0\uFE0F O valor mínimo para pelada paga é *R$ $MIN_PRICE*.\nDigite *0* para gratuita ou um valor a partir de R$ $MIN_PRICE.")
+                    ws.sendMessage(context.from, "\u26A0\uFE0F O mínimo é *R\$ $MIN_PRICE*.\nDigite *0* para gratuita ou um valor a partir de R\$ $MIN_PRICE.")
                     return
                 }
                 if (price > MAX_PRICE) {
-                    ws.sendMessage(context.from, "\u26A0\uFE0F O valor máximo por jogador é *R$ $MAX_PRICE*.")
+                    ws.sendMessage(context.from, "\u26A0\uFE0F O máximo é *R\$ $MAX_PRICE* por jogador.")
                     return
                 }
                 if (price > BigDecimal.ZERO) {
                     sessionManager.updateSession(context.from, "price", price.toString(), "pixKey")
                     ws.sendButtons(
                         to = context.from,
-                        body = "\uD83D\uDCF2 *Chave Pix*\n\nDigite a chave Pix para receber os pagamentos.\n\n_Os valores serão repassados com taxa de 10% da plataforma._",
-                        buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar")),
-                        footer = "Passo 6 de 6"
+                        body = "\uD83D\uDCB0 R\$ $price por jogador.\n\nQual sua chave Pix para receber?\n_CPF, e-mail, telefone ou chave aleatória_",
+                        buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar"))
                     )
                 } else {
                     sessionManager.updateSession(context.from, "price", price.toString(), null)
                     showSummary(context, ws)
                 }
             }
+
             "pixKey" -> {
                 if (value.isBlank()) {
-                    ws.sendMessage(
-                        context.from,
-                        "\u26A0\uFE0F A chave Pix é obrigatória para peladas pagas.\nDigite sua chave Pix (CPF, e-mail, telefone ou chave aleatória):"
-                    )
+                    ws.sendMessage(context.from, "\u26A0\uFE0F A chave Pix é obrigatória para peladas pagas.\nDigite sua chave Pix:")
                     return
                 }
                 sessionManager.updateSession(context.from, "pixKey", value, null)
@@ -201,6 +201,19 @@ class CriarCommand(
         }
     }
 
+    private fun askPrice(context: CommandContext, ws: WhatsAppService) {
+        ws.sendButtons(
+            to = context.from,
+            body = "*(6/6)* Vai cobrar dos jogadores?\n\nDigite o valor ou *0* para gratuita.\n_Mín. R\$ 10 · Máx. R\$ 100_",
+            buttons = listOf(
+                Button(id = "/criar input_price 0", title = "Gratuita"),
+                Button(id = "/criar cancelar", title = "\u274C Cancelar")
+            )
+        )
+    }
+
+    // ── Seleção de jogadores via lista ──────────────────────
+
     private fun handlePlayersSelected(context: CommandContext, ws: WhatsAppService) {
         val max = context.args.getOrNull(1) ?: return
 
@@ -208,20 +221,17 @@ class CriarCommand(
             sessionManager.updateSession(context.from, "maxPlayers", "", "maxPlayers")
             ws.sendButtons(
                 to = context.from,
-                body = "\uD83D\uDC65 *Quantidade personalizada*\n\nDigite o número de jogadores _(mínimo 2)_:",
+                body = "*(5/6)* Quantos jogadores? _(mínimo 2)_",
                 buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar"))
             )
             return
         }
 
         sessionManager.updateSession(context.from, "maxPlayers", max, "price")
-        ws.sendButtons(
-            to = context.from,
-            body = "\uD83D\uDCB0 *Valor por jogador*\n\nDigite o valor em reais.\n_Ex: 25_\n\nDigite *0* para pelada gratuita.\n_Mínimo R$ 10 · Máximo R$ 100_",
-            buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar")),
-            footer = "Passo 5 de 6"
-        )
+        askPrice(context, ws)
     }
+
+    // ── Resumo e confirmação ────────────────────────────────
 
     private fun showSummary(context: CommandContext, ws: WhatsAppService) {
         val session = sessionManager.getSession(context.from) ?: return
@@ -230,30 +240,31 @@ class CriarCommand(
         val esporte = fields["esporte"]?.let { runCatching { Esporte.valueOf(it) }.getOrNull() }
         val dateTime = fields["dataHora"]?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() }
         val price = fields["price"]?.toBigDecimalOrNull() ?: BigDecimal.ZERO
-        val maxPlayers = fields["maxPlayers"]
+        val maxPlayers = fields["maxPlayers"]?.toIntOrNull() ?: 0
+
+        val descricao = fields["descricao"]?.takeIf { it.isNotBlank() }
 
         ws.sendMessage(
             context.from,
             buildString {
-                append("\uD83D\uDCCB *Resumo da Pelada*\n\n")
-                append("\uD83C\uDFC6 *Esporte:* ${esporte?.label ?: fields["esporte"]}\n")
-                append("\uD83D\uDCDD *Descrição:* ${fields["descricao"] ?: "—"}\n")
-                append("\uD83D\uDCCD *Local:* ${fields["local"]}\n")
-                append("\uD83D\uDCC5 *Data:* ${dateTime?.format(DATE_FORMATTER_FULL) ?: fields["dataHora"]}\n")
-                append("\uD83D\uDC65 *Jogadores:* ${if (maxPlayers == "0") "Sem limite" else maxPlayers}\n")
-                append("\uD83D\uDCB0 *Valor:* ${if (price > BigDecimal.ZERO) "R$ $price" else "Gratuita"}\n")
+                append("\uD83D\uDCCB *Confira sua pelada:*\n\n")
+                append("${esporte?.display ?: fields["esporte"]}\n")
+                if (descricao != null) append("\uD83D\uDCDD $descricao\n")
+                append("\uD83D\uDCCD ${fields["local"]}\n")
+                append("\uD83D\uDCC5 ${dateTime?.let { UxCopy.formatDate(it) } ?: fields["dataHora"]}\n")
+                append("\uD83D\uDC65 ${if (maxPlayers == 0) "Sem limite de jogadores" else "$maxPlayers jogadores"}\n")
+                append("\uD83D\uDCB0 ${UxCopy.formatPrice(price)}")
                 if (!fields["pixKey"].isNullOrBlank()) {
-                    append("\uD83D\uDCF2 *Pix:* ${fields["pixKey"]}\n")
+                    append("\n\uD83D\uDCF2 Pix: ${fields["pixKey"]}")
                 }
-                append("\n_Confira os dados e confirme a criação._")
             }
         )
 
         ws.sendButtons(
             to = context.from,
-            body = "Tudo certo?",
+            body = "Tudo certo. Criar pelada?",
             buttons = listOf(
-                Button(id = "/criar confirmar", title = "\u2705 Confirmar"),
+                Button(id = "/criar confirmar", title = "\u2705 Criar Pelada"),
                 Button(id = "/criar cancelar", title = "\u274C Cancelar")
             )
         )
@@ -263,7 +274,14 @@ class CriarCommand(
         log.info("Confirmando criação de pelada para {}", context.from)
         val session = sessionManager.getSession(context.from)
         if (session == null) {
-            ws.sendMessage(context.from, "\u26A0\uFE0F Sessão expirada. Inicie novamente com /criar.")
+            ws.sendButtons(
+                to = context.from,
+                body = "\u26A0\uFE0F A sessão expirou. Vamos recomeçar?",
+                buttons = listOf(
+                    Button(id = "/criar", title = "Criar Pelada"),
+                    Button(id = "/start", title = "Menu")
+                )
+            )
             return
         }
 
@@ -274,9 +292,18 @@ class CriarCommand(
             val dateTime = LocalDateTime.parse(fields["dataHora"] ?: throw IllegalArgumentException("Data obrigatória"))
             val maxPlayers = fields["maxPlayers"]?.toInt() ?: throw IllegalArgumentException("Limite obrigatório")
             val price = fields["price"]?.toBigDecimal() ?: BigDecimal.ZERO
-            val pixKey = fields["pixKey"]
 
-            if (price > BigDecimal.ZERO && pixKey.isNullOrBlank()) {
+            if (dateTime.isBefore(LocalDateTime.now())) {
+                sessionManager.updateSession(context.from, "dataHora", "", "dataHora")
+                ws.sendButtons(
+                    to = context.from,
+                    body = "\u26A0\uFE0F A data *${UxCopy.formatDate(dateTime)}* já passou.\n\nDigite uma nova data _(DD/MM HH:MM)_:",
+                    buttons = listOf(Button(id = "/criar cancelar", title = "\u274C Cancelar"))
+                )
+                return
+            }
+
+            if (price > BigDecimal.ZERO && fields["pixKey"].isNullOrBlank()) {
                 throw IllegalArgumentException("Chave Pix obrigatória para peladas pagas")
             }
 
@@ -285,7 +312,7 @@ class CriarCommand(
                 phone = context.from,
                 request = CreatePeladaRequest(
                     esporte = esporte.name,
-                    descricao = fields["descricao"],
+                    descricao = fields["descricao"]?.takeIf { it.isNotBlank() },
                     dataHora = dateTime,
                     local = fields["local"] ?: throw IllegalArgumentException("Local obrigatório"),
                     limiteJogadores = maxPlayers,
@@ -295,55 +322,54 @@ class CriarCommand(
             )
 
             sessionManager.clear(context.from)
-            log.info("Pelada criada com sucesso! Código: {} por {}", pelada.codigo, context.from)
+            log.info("Pelada criada! Código: {} por {}", pelada.codigo, context.from)
 
             ws.sendMessage(
                 context.from,
                 buildString {
-                    append("\u2705 *Pelada Criada com Sucesso!*\n\n")
-                    append("\uD83D\uDD11 Código: *${pelada.codigo}*\n\n")
-                    append("Compartilhe o código *${pelada.codigo}* com seus amigos para que eles participem!\n\n")
-                    append("_Basta enviar o código aqui no chat para entrar._")
+                    append("\u2705 *Pelada criada!*\n\n")
+                    append("Código: *${pelada.codigo}*\n\n")
+                    append("Compartilhe esse código com os amigos \u2014 basta enviar aqui no chat para entrar.")
                 }
             )
 
             ws.sendButtons(
                 to = context.from,
-                body = "Próximos passos:",
+                body = "O que fazer agora?",
                 buttons = listOf(
-                    Button(id = "/gerenciar convidar ${pelada.codigo}", title = "Convidar Amigos"),
-                    Button(id = "/gerenciar pelada ${pelada.codigo}", title = "Gerenciar"),
-                    Button(id = "/start", title = "Menu Inicial")
+                    Button(id = "/gerenciar convidar ${pelada.codigo}", title = "\uD83D\uDCE8 Convidar"),
+                    Button(id = "/gerenciar pelada ${pelada.codigo}", title = "\uD83D\uDC51 Gerenciar"),
+                    Button(id = "/start", title = "Menu")
                 )
             )
         } catch (e: Exception) {
-            log.error("Error creating pelada for {}: {}", context.from, e.message, e)
+            log.error("Erro ao criar pelada para {}: {}", context.from, e.message, e)
             sessionManager.clear(context.from)
-            ws.sendMessage(context.from, "\u274C Ocorreu um erro ao criar a pelada. Tente novamente.")
             ws.sendButtons(
                 to = context.from,
-                body = "O que deseja fazer?",
+                body = "\u274C Não foi possível criar a pelada. Tente novamente.",
                 buttons = listOf(
                     Button(id = "/criar", title = "Tentar Novamente"),
-                    Button(id = "/start", title = "Menu Inicial")
+                    Button(id = "/start", title = "Menu")
                 )
             )
         }
     }
 
     private fun cancelCreation(context: CommandContext, ws: WhatsAppService) {
-        log.info("Criação de pelada cancelada por {}", context.from)
+        log.info("Criação cancelada por {}", context.from)
         sessionManager.clear(context.from)
-        ws.sendMessage(context.from, "\u274C Criação cancelada.")
         ws.sendButtons(
             to = context.from,
-            body = "O que deseja fazer?",
+            body = "Tudo bem, nada foi criado. \uD83D\uDC4D",
             buttons = listOf(
                 Button(id = "/criar", title = "Criar Pelada"),
-                Button(id = "/start", title = "Menu Inicial")
+                Button(id = "/start", title = "Menu")
             )
         )
     }
+
+    // ── Utilitários ─────────────────────────────────────────
 
     private fun parseDateTime(input: String): LocalDateTime? {
         return try {

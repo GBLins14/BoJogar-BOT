@@ -2,12 +2,13 @@ package com.bojogar.bot.service
 
 import com.bojogar.bot.dto.response.ParticipantResponse
 import com.bojogar.bot.dto.response.PeladaResponse
+import com.bojogar.bot.whatsapp.UxCopy
+import com.bojogar.bot.whatsapp.model.Button
 import com.bojogar.bot.whatsapp.service.WhatsAppService
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
-import java.time.format.DateTimeFormatter
 
 @Service
 class NotificationService(
@@ -48,26 +49,39 @@ class NotificationService(
     fun notifyWaitlistPromotion(promoted: ParticipantResponse, pelada: PeladaResponse) {
         val message = buildString {
             append("\uD83C\uDF89 *Vaga Liberada!*\n\n")
-            append("Uma vaga abriu na pelada *${pelada.codigo}* — ${pelada.esporteLabel}!\n\n")
+            append("Uma vaga abriu na pelada *${pelada.codigo}* \u2014 ${pelada.esporteLabel}!\n\n")
             append("\uD83D\uDCCD ${pelada.local}\n")
-            append("\uD83D\uDCC5 ${pelada.dataHora}\n\n")
+            append("\uD83D\uDCC5 ${UxCopy.formatDate(pelada.dataHora)}\n\n")
             append("Você foi *automaticamente confirmado*!")
             if (pelada.valorPorJogador > BigDecimal.ZERO) {
-                append("\n\n\uD83D\uDCB0 *Valor:* R$ ${pelada.valorPorJogador}")
-                append("\n\nEnvie */pagar* para gerar o PIX e efetuar o pagamento.")
+                append("\n\n\uD83D\uDCB0 *Valor:* ${UxCopy.formatPrice(pelada.valorPorJogador)}")
             }
         }
 
-        notifyUser(promoted.userPhone, message)
+        try {
+            whatsappService.sendMessage(promoted.userPhone, message)
+            if (pelada.valorPorJogador > BigDecimal.ZERO) {
+                whatsappService.sendButtons(
+                    to = promoted.userPhone,
+                    body = "Pague agora para garantir sua vaga!",
+                    buttons = listOf(
+                        Button(id = "/pagar gerar ${pelada.codigo}", title = "Pagar via PIX"),
+                        Button(id = "/start", title = "Menu")
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            log.warn("Failed to notify waitlist promotion {}: {}", promoted.userPhone, e.message)
+        }
     }
 
     @Async
     fun notifyPeladaCancelled(pelada: PeladaResponse, participants: List<ParticipantResponse>) {
         val message = buildString {
             append("\u274C *Pelada Cancelada*\n\n")
-            append("A pelada *${pelada.codigo}* — ${pelada.esporteLabel} foi cancelada pelo organizador.\n\n")
+            append("A pelada *${pelada.codigo}* \u2014 ${pelada.esporteLabel} foi cancelada pelo organizador.\n\n")
             append("\uD83D\uDCCD ${pelada.local}\n")
-            append("\uD83D\uDCC5 ${pelada.dataHora}\n\n")
+            append("\uD83D\uDCC5 ${UxCopy.formatDate(pelada.dataHora)}\n\n")
             append("Caso tenha direito a reembolso, entre em contato com o organizador.")
         }
 
@@ -82,7 +96,7 @@ class NotificationService(
     fun notifyParticipantRemoved(removed: ParticipantResponse, pelada: PeladaResponse) {
         val message = buildString {
             append("\u26A0\uFE0F *Removido da Pelada*\n\n")
-            append("Você foi removido da pelada *${pelada.codigo}* — ${pelada.esporteLabel} pelo organizador.\n\n")
+            append("Você foi removido da pelada *${pelada.codigo}* \u2014 ${pelada.esporteLabel} pelo organizador.\n\n")
             append("Caso tenha dúvidas, entre em contato com o organizador.")
         }
 
@@ -91,13 +105,12 @@ class NotificationService(
 
     @Async
     fun notifyPaymentConfirmed(participantPhone: String, participantName: String, pelada: PeladaResponse) {
-        val dateFmt = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
         val message = buildString {
-            append("\u2705 *Pagamento Confirmado — Vaga Garantida!*\n\n")
-            append("Seu pagamento de *R$ ${pelada.valorPorJogador}* para a pelada *${pelada.codigo}* foi confirmado.\n\n")
+            append("\u2705 *Pagamento Confirmado \u2014 Vaga Garantida!*\n\n")
+            append("Seu pagamento de *${UxCopy.formatPrice(pelada.valorPorJogador)}* para a pelada *${pelada.codigo}* foi confirmado.\n\n")
             append("\uD83C\uDFC6 ${pelada.esporteLabel}\n")
             append("\uD83D\uDCCD ${pelada.local}\n")
-            append("\uD83D\uDCC5 ${pelada.dataHora.format(dateFmt)}\n\n")
+            append("\uD83D\uDCC5 ${UxCopy.formatDate(pelada.dataHora)}\n\n")
             append("Sua vaga está garantida! Te vemos lá, $participantName! \uD83D\uDCAA")
         }
 
