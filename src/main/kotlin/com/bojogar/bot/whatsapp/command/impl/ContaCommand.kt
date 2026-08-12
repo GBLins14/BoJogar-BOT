@@ -71,9 +71,7 @@ class ContaCommand(
                 append("\uD83D\uDCF1 *Telefone:* $phone\n")
                 append("\u26BD *Peladas ativas:* $active\n")
                 append("\uD83D\uDCCA *Jogou:* $playedLabel\n")
-                if (walletBalance > BigDecimal.ZERO) {
-                    append("\uD83D\uDCB0 *Saldo:* R$ $walletBalance")
-                }
+                append("\uD83D\uDCB0 *Saldo:* R$ $walletBalance")
             },
             buttons = listOf(
                 Button(id = "/minhas proximas", title = "\uD83D\uDCC5 Minhas Peladas"),
