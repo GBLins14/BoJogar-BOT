@@ -182,6 +182,8 @@ class MinhasPeladasCommand(
                 append("\uD83C\uDFC6 *Pelada:* ${pelada.esporteLabel} \u2014 ${pelada.local}\n")
                 append("\uD83D\uDCC5 *Data:* ${UxCopy.formatDate(pelada.dataHora)}\n")
                 append("\uD83D\uDCB0 *Valor:* ${UxCopy.formatPrice(pelada.valorPorJogador)}\n")
+                val organizador = if (!pelada.createdByName.isNullOrBlank()) pelada.createdByName else pelada.createdByPhone
+                append("\uD83D\uDC64 *Organizador:* $organizador\n")
                 append("\uD83D\uDCCA *Status:* $statusLabel")
             }
         )
@@ -202,6 +204,9 @@ class MinhasPeladasCommand(
             buttons.add(Button(id = "/minhas cancelar $codigo", title = "Cancelar Inscrição"))
         }
         if (buttons.size < 3) buttons.add(Button(id = "/minhas confirmados $codigo", title = "Ver Confirmados"))
+        if (buttons.size < 3 && !authorizationService.isAdminOrOwner(context.from, codigo)) {
+            buttons.add(Button(id = "/entrar $codigo organizador", title = "Msg Organizador"))
+        }
         if (buttons.size < 3) buttons.add(Button(id = "/minhas proximas", title = "Voltar"))
 
         ws.sendButtons(to = context.from, body = "Escolha uma ação:", buttons = buttons.take(3))
@@ -287,22 +292,27 @@ class MinhasPeladasCommand(
             buildString {
                 append("\uD83D\uDC65 *Confirmados \u2014 $codigo*\n\n")
                 confirmed.forEachIndexed { i, p ->
-                    val roleIcon = UxCopy.roleShort(p.role)
                     val name = p.displayName ?: p.userName
-                    append("${i + 1}. $name${if (roleIcon.isNotEmpty()) " $roleIcon" else ""}\n")
+                    val tag = if (p.role == "OWNER") " (Organizador)" else ""
+                    append("${i + 1}. $name$tag\n")
                 }
                 val limite = if (pelada.limiteJogadores > 0) "/${pelada.limiteJogadores}" else ""
                 append("\n_Total: ${confirmed.size}$limite confirmado(s)_")
             }
         )
 
+        val confirmadosButtons = mutableListOf(
+            Button(id = "/minhas ver $codigo", title = "Voltar")
+        )
+        if (!authorizationService.isAdminOrOwner(context.from, codigo)) {
+            confirmadosButtons.add(Button(id = "/entrar $codigo organizador", title = "Msg Organizador"))
+        }
+        confirmadosButtons.add(Button(id = "/start", title = "Menu"))
+
         ws.sendButtons(
             to = context.from,
             body = "Mais alguma coisa?",
-            buttons = listOf(
-                Button(id = "/minhas ver $codigo", title = "Voltar"),
-                Button(id = "/start", title = "Menu")
-            )
+            buttons = confirmadosButtons.take(3)
         )
     }
 
