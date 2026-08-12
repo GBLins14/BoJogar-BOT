@@ -72,6 +72,19 @@ class StartCommand(
             )
         }
 
+        val contaRows = listOf(
+            ListRow(
+                id = "/conta",
+                title = "\uD83D\uDC64 Minha Conta",
+                description = "Perfil, saldo e inscrições"
+            ),
+            ListRow(
+                id = "/minhas historico",
+                title = "\uD83D\uDCCA Histórico",
+                description = "Peladas que você participou"
+            )
+        )
+
         val helpRows = listOf(
             ListRow(
                 id = "/ajuda",
@@ -98,6 +111,10 @@ class StartCommand(
                 ListSection(
                     title = "Menu Principal",
                     rows = rows
+                ),
+                ListSection(
+                    title = "Minha Conta",
+                    rows = contaRows
                 ),
                 ListSection(
                     title = "Ajuda",
