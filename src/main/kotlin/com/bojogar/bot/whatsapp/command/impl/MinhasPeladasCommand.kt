@@ -4,7 +4,6 @@ import com.bojogar.bot.dto.response.ParticipantResponse
 import com.bojogar.bot.dto.response.PeladaResponse
 import com.bojogar.bot.service.AuthorizationService
 import com.bojogar.bot.service.LeaveResult
-import com.bojogar.bot.service.NotificationService
 import com.bojogar.bot.service.ParticipantService
 import com.bojogar.bot.service.PagamentoService
 import com.bojogar.bot.service.PeladaService
@@ -26,7 +25,6 @@ class MinhasPeladasCommand(
     private val participantService: ParticipantService,
     private val peladaService: PeladaService,
     private val authorizationService: AuthorizationService,
-    private val notificationService: NotificationService,
     private val pagamentoService: PagamentoService
 ) : BotCommand {
 
@@ -235,10 +233,7 @@ class MinhasPeladasCommand(
                     }
                 )
                 if (result.promoted != null) {
-                    val pelada = peladaService.findByCode(codigo)
-                    if (pelada != null) {
-                        notificationService.notifyWaitlistPromotion(result.promoted, pelada)
-                    }
+                    log.info("Jogador {} promovido da lista de espera na pelada {}", result.promoted.userPhone, codigo)
                 }
             }
             is LeaveResult.NotFound -> {

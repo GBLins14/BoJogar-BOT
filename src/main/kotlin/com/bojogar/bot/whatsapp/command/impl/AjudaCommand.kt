@@ -150,7 +150,7 @@ class AjudaCommand : BotCommand {
                 append("\uD83D\uDCB3 *Saque* \u2014 solicite a retirada do saldo arrecadado\n")
                 append("\uD83D\uDCE8 *Convite* \u2014 gere um link para compartilhar com os amigos\n")
                 append("\u270F\uFE0F *Editar* \u2014 altere local, data, valor ou limite de vagas\n")
-                append("\u274C *Cancelar* \u2014 cancele a pelada e notifique todos\n\n")
+                append("\u274C *Cancelar* \u2014 cancele a pelada\n\n")
                 append("_Tudo direto por aqui, sem sair do WhatsApp._")
             }
         )

@@ -26,7 +26,6 @@ class GerenciarCommand(
     private val peladaService: PeladaService,
     private val participantService: ParticipantService,
     private val pagamentoService: PagamentoService,
-    private val notificationService: NotificationService,
     private val sessionManager: SessionManager,
     private val whatsAppProperties: WhatsAppProperties
 ) : BotCommand {
@@ -151,7 +150,7 @@ class GerenciarCommand(
                 title = "Configuração",
                 rows = listOf(
                     ListRow(id = "/gerenciar editar $code", title = "\u270F\uFE0F Editar Pelada", description = "Local, data, valor..."),
-                    ListRow(id = "/gerenciar cancelar $code", title = "\u274C Cancelar Pelada", description = "Cancelar e notificar todos")
+                    ListRow(id = "/gerenciar cancelar $code", title = "\u274C Cancelar Pelada", description = "Cancelar a pelada")
                 )
             )
         )
@@ -289,17 +288,7 @@ class GerenciarCommand(
                 log.info("Jogador {} removido da pelada {} com sucesso", phone, code)
                 ws.sendMessage(context.from, "\u2705 Jogador removido com sucesso.")
 
-                val pelada = peladaService.findByCode(code)
-                val removedParticipant = participantService.getParticipants(code).find { it.userPhone == phone }
-                if (pelada != null && removedParticipant != null) {
-                    notificationService.notifyParticipantRemoved(removedParticipant, pelada)
-                }
-
                 if (result.promoted != null) {
-                    val promotedPelada = peladaService.findByCode(code)
-                    if (promotedPelada != null) {
-                        notificationService.notifyWaitlistPromotion(result.promoted, promotedPelada)
-                    }
                     ws.sendMessage(
                         context.from,
                         "\uD83D\uDD04 *${result.promoted.displayName ?: result.promoted.userName}* foi promovido da lista de espera."
@@ -572,12 +561,7 @@ class GerenciarCommand(
                 "chavePix" -> "Chave Pix"
                 else -> field
             }
-            ws.sendMessage(context.from, "\u2705 *$fieldLabel* atualizado com sucesso!")
-
-            notificationService.notifyParticipants(
-                code,
-                "\uD83D\uDD14 A pelada *$code* foi atualizada pelo organizador. Confira os novos detalhes!"
-            )
+            ws.sendMessage(context.from, "\u2705 *$fieldLabel* atualizado com sucesso!\n\n_Avise os jogadores sobre a alteração._")
         } catch (e: IllegalArgumentException) {
             ws.sendMessage(context.from, "\u26A0\uFE0F ${e.message}")
         } catch (e: Exception) {
@@ -611,7 +595,7 @@ class GerenciarCommand(
             body = buildString {
                 append("\u26A0\uFE0F *Tem certeza?*\n\n")
                 append("Cancelar a pelada *$code* afetará *${participants.size}* jogador(es).\n")
-                append("Todos serão notificados.\n\n")
+                append("_Avise os jogadores sobre o cancelamento._\n\n")
                 append("_Esta ação não pode ser desfeita._")
             },
             buttons = listOf(
@@ -634,12 +618,11 @@ class GerenciarCommand(
             val participants = participantService.getActiveParticipants(code)
             val pelada = peladaService.cancel(code, context.from)
 
-            notificationService.notifyPeladaCancelled(pelada, participants)
-            log.info("Pelada {} cancelada por {} \u2014 {} jogadores notificados", code, context.from, participants.size)
+            log.info("Pelada {} cancelada por {}", code, context.from)
 
             ws.sendMessage(
                 context.from,
-                "\u274C *Pelada Cancelada*\n\nA pelada *$code* foi cancelada e *${participants.size}* jogador(es) foram notificados."
+                "\u274C *Pelada Cancelada*\n\nA pelada *$code* foi cancelada.\n\n\u26A0\uFE0F Avise os *${participants.size}* jogador(es) inscrito(s) sobre o cancelamento."
             )
         } catch (e: Exception) {
             log.error("Error cancelling pelada {}: {}", code, e.message, e)

@@ -145,7 +145,7 @@ class EntrarCommand(
                         append("\uD83D\uDCCB *Lista de Espera*\n\n")
                         append("A pelada *$code* está lotada.\n")
                         append("Você foi adicionado na *posição #${result.position}*.\n\n")
-                        append("_Você será notificado assim que uma vaga abrir!_")
+                        append("_Fique de olho \u2014 se abrir vaga, você entra!_")
                     }
                 )
                 ws.sendButtons(
