@@ -45,6 +45,7 @@ class MinhasPeladasCommand(
             "ver" -> showDetalhes(context, whatsappService)
             "cancelar" -> showCancelar(context, whatsappService)
             "cancelar_sim" -> confirmarCancelamento(context, whatsappService)
+            "confirmados" -> showConfirmados(context, whatsappService)
             "historico" -> showHistorico(context, whatsappService)
             else -> showMenu(context, whatsappService)
         }
@@ -200,8 +201,8 @@ class MinhasPeladasCommand(
         } else if (pendingPayment == null) {
             buttons.add(Button(id = "/minhas cancelar $codigo", title = "Cancelar Inscrição"))
         }
+        if (buttons.size < 3) buttons.add(Button(id = "/minhas confirmados $codigo", title = "Ver Confirmados"))
         if (buttons.size < 3) buttons.add(Button(id = "/minhas proximas", title = "Voltar"))
-        if (buttons.size < 3) buttons.add(Button(id = "/start", title = "Menu"))
 
         ws.sendButtons(to = context.from, body = "Escolha uma ação:", buttons = buttons.take(3))
     }
@@ -251,6 +252,55 @@ class MinhasPeladasCommand(
             body = "Quer participar de outra pelada?",
             buttons = listOf(
                 Button(id = "/entrar", title = "Entrar com Código"),
+                Button(id = "/start", title = "Menu")
+            )
+        )
+    }
+
+    private fun showConfirmados(context: CommandContext, ws: WhatsAppService) {
+        val codigo = context.args.getOrNull(1) ?: return showProximas(context, ws)
+        log.info("Listando confirmados da pelada {} para {}", codigo, context.from)
+
+        val pelada = peladaService.findByCode(codigo)
+        if (pelada == null) {
+            ws.sendMessage(context.from, "\u26A0\uFE0F Pelada *$codigo* não encontrada.")
+            return
+        }
+
+        val participants = participantService.getActiveParticipants(codigo)
+        val confirmed = participants.filter { it.status == "CONFIRMED" }
+
+        if (confirmed.isEmpty()) {
+            ws.sendButtons(
+                to = context.from,
+                body = "\uD83D\uDC65 Nenhum jogador confirmado nesta pelada ainda.",
+                buttons = listOf(
+                    Button(id = "/minhas ver $codigo", title = "Voltar"),
+                    Button(id = "/start", title = "Menu")
+                )
+            )
+            return
+        }
+
+        ws.sendMessage(
+            context.from,
+            buildString {
+                append("\uD83D\uDC65 *Confirmados \u2014 $codigo*\n\n")
+                confirmed.forEachIndexed { i, p ->
+                    val roleIcon = UxCopy.roleShort(p.role)
+                    val name = p.displayName ?: p.userName
+                    append("${i + 1}. $name${if (roleIcon.isNotEmpty()) " $roleIcon" else ""}\n")
+                }
+                val limite = if (pelada.limiteJogadores > 0) "/${pelada.limiteJogadores}" else ""
+                append("\n_Total: ${confirmed.size}$limite confirmado(s)_")
+            }
+        )
+
+        ws.sendButtons(
+            to = context.from,
+            body = "Mais alguma coisa?",
+            buttons = listOf(
+                Button(id = "/minhas ver $codigo", title = "Voltar"),
                 Button(id = "/start", title = "Menu")
             )
         )

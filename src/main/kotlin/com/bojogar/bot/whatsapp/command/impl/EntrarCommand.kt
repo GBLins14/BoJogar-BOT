@@ -33,6 +33,7 @@ class EntrarCommand(
         when {
             code == null -> askForCode(context, whatsappService)
             sub == "confirmar" -> confirmJoin(context, whatsappService, code)
+            sub == "organizador" -> showOrganizador(context, whatsappService, code)
             else -> showPeladaDetails(context, whatsappService, code)
         }
     }
@@ -63,6 +64,8 @@ class EntrarCommand(
             return
         }
 
+        val organizadorDisplay = if (!pelada.createdByName.isNullOrBlank()) pelada.createdByName else pelada.createdByPhone
+
         ws.sendMessage(
             context.from,
             buildString {
@@ -71,10 +74,8 @@ class EntrarCommand(
                 append("\uD83D\uDCCD *Local:* ${pelada.local}\n")
                 append("\uD83D\uDCC5 *Data:* ${UxCopy.formatDate(pelada.dataHora)}\n")
                 append("\uD83D\uDC65 *Vagas:* ${UxCopy.formatRemaining(pelada.remainingSlots, pelada.limiteJogadores)}\n")
-                append("\uD83D\uDCB0 *Valor:* ${UxCopy.formatPrice(pelada.valorPorJogador)}")
-                if (!pelada.createdByName.isNullOrBlank()) {
-                    append("\n\uD83D\uDC64 *Organizador:* ${pelada.createdByName}")
-                }
+                append("\uD83D\uDCB0 *Valor:* ${UxCopy.formatPrice(pelada.valorPorJogador)}\n")
+                append("\uD83D\uDC64 *Organizador:* $organizadorDisplay")
             }
         )
 
@@ -83,6 +84,39 @@ class EntrarCommand(
             body = "Deseja participar desta pelada?",
             buttons = listOf(
                 Button(id = "/entrar ${pelada.codigo} confirmar", title = "Participar"),
+                Button(id = "/entrar ${pelada.codigo} organizador", title = "Msg Organizador"),
+                Button(id = "/minhas confirmados ${pelada.codigo}", title = "Ver Confirmados")
+            )
+        )
+    }
+
+    private fun showOrganizador(context: CommandContext, ws: WhatsAppService, code: String) {
+        val pelada = peladaService.findByCode(code)
+        if (pelada == null) {
+            ws.sendMessage(context.from, "\u26A0\uFE0F Pelada *$code* não encontrada.")
+            return
+        }
+
+        val phone = pelada.createdByPhone.replace(Regex("[^0-9]"), "")
+        val nome = if (!pelada.createdByName.isNullOrBlank()) pelada.createdByName else phone
+        val deepLink = "https://wa.me/$phone"
+
+        ws.sendMessage(
+            context.from,
+            buildString {
+                append("\uD83D\uDC64 *Organizador da pelada $code*\n\n")
+                append("\uD83D\uDC51 *$nome*\n\n")
+                append("Clique no link abaixo para enviar uma mensagem:\n")
+                append(deepLink)
+            }
+        )
+
+        ws.sendButtons(
+            to = context.from,
+            body = "Voltar para a pelada:",
+            buttons = listOf(
+                Button(id = "/entrar $code confirmar", title = "Participar"),
+                Button(id = "/entrar $code", title = "Ver Pelada"),
                 Button(id = "/start", title = "Menu")
             )
         )
@@ -108,6 +142,7 @@ class EntrarCommand(
                     to = context.from,
                     body = "Sua vaga está garantida!",
                     buttons = listOf(
+                        Button(id = "/minhas confirmados $code", title = "Ver Confirmados"),
                         Button(id = "/minhas proximas", title = "Minhas Peladas"),
                         Button(id = "/start", title = "Menu")
                     )
