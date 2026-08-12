@@ -92,7 +92,7 @@ class StartCommand(
 
         whatsappService.sendList(
             to = context.from,
-            header = "\uD83C\uDFDF\uFE0F BoJogar",
+            header = "\u26BD BoJogar",
             body = "E aí, $nome! \uD83D\uDC4B\n\nO que você quer fazer?",
             buttonLabel = "Abrir Menu",
             sections = listOf(
