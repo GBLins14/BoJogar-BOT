@@ -30,8 +30,8 @@ class SyncPayWebhookController(
         if (syncPayProperties.webhookToken.isNotBlank()) {
             val expectedToken = "Bearer ${syncPayProperties.webhookToken}"
             if (authorization != expectedToken) {
-                log.warn("Invalid webhook authorization header")
-                return ResponseEntity.ok().build()
+                log.warn("Invalid webhook authorization header from SyncPay")
+                return ResponseEntity.status(401).build()
             }
         }
 

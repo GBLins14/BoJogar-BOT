@@ -1,22 +1,22 @@
 package com.bojogar.bot.dto.request
 
-import jakarta.validation.constraints.Min
-import jakarta.validation.constraints.NotBlank
-import jakarta.validation.constraints.NotNull
-import jakarta.validation.constraints.PositiveOrZero
+import jakarta.validation.constraints.*
 import java.math.BigDecimal
 import java.time.LocalDateTime
 
 data class CreatePeladaRequest(
     @field:NotBlank
+    @field:Size(max = 20)
     val esporte: String,
 
+    @field:Size(max = 200)
     val descricao: String? = null,
 
     @field:NotNull
     val dataHora: LocalDateTime,
 
     @field:NotBlank
+    @field:Size(min = 5, max = 200)
     val local: String,
 
     @field:Min(0)

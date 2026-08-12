@@ -1,11 +1,8 @@
 package com.bojogar.bot.controller
 
 import com.bojogar.bot.dto.response.ParticipantResponse
-import com.bojogar.bot.service.JoinResult
-import com.bojogar.bot.service.LeaveResult
-import com.bojogar.bot.service.ParticipantService
-import com.bojogar.bot.service.RemoveResult
 import com.bojogar.bot.exception.BusinessException
+import com.bojogar.bot.service.*
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -13,11 +10,18 @@ import org.springframework.web.bind.annotation.*
 @RestController
 @RequestMapping("/v1/api/peladas/{code}/participants")
 class ParticipantController(
-    private val participantService: ParticipantService
+    private val participantService: ParticipantService,
+    private val authorizationService: AuthorizationService
 ) {
 
     @GetMapping
-    fun getParticipants(@PathVariable code: String): List<ParticipantResponse> {
+    fun getParticipants(
+        @PathVariable code: String,
+        @RequestHeader("X-User-Phone") requesterPhone: String
+    ): List<ParticipantResponse> {
+        if (!authorizationService.isAdminOrOwner(requesterPhone, code)) {
+            throw BusinessException("Sem permissão para ver jogadores desta pelada")
+        }
         return participantService.getParticipants(code)
     }
 

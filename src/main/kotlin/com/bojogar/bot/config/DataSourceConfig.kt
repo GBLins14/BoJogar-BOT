@@ -52,7 +52,7 @@ class DataSourceConfig(
             }
         }
 
-        log.info("Conectando ao PostgreSQL: {}", jdbcUrl)
+        log.info("Conectando ao PostgreSQL: {}:{}{}", uri.host, if (uri.port != -1) uri.port else 5432, uri.path)
 
         val hikari = HikariConfig().apply {
             this.jdbcUrl = jdbcUrl

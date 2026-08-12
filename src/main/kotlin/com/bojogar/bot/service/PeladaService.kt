@@ -23,7 +23,8 @@ class PeladaService(
     private val peladaRepository: PeladaRepository,
     private val userRepository: UserRepository,
     private val participantRepository: PeladaParticipantRepository,
-    private val peladaMapper: PeladaMapper
+    private val peladaMapper: PeladaMapper,
+    private val authorizationService: AuthorizationService
 ) {
 
     companion object {
@@ -96,6 +97,10 @@ class PeladaService(
 
     @Transactional
     fun update(code: String, requesterPhone: String, request: UpdatePeladaRequest): PeladaResponse {
+        if (!authorizationService.isAdminOrOwner(requesterPhone, code)) {
+            throw BusinessException("Sem permissão para editar esta pelada")
+        }
+
         val pelada = peladaRepository.findByCodigo(code.uppercase())
             ?: throw BusinessException("Pelada não encontrada: $code")
 
@@ -115,6 +120,10 @@ class PeladaService(
 
     @Transactional
     fun cancel(code: String, requesterPhone: String): PeladaResponse {
+        if (!authorizationService.isOwner(requesterPhone, code)) {
+            throw BusinessException("Apenas o organizador pode cancelar a pelada")
+        }
+
         val pelada = peladaRepository.findByCodigo(code.uppercase())
             ?: throw BusinessException("Pelada não encontrada: $code")
 
