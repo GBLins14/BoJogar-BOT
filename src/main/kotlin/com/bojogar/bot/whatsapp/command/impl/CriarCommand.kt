@@ -50,6 +50,7 @@ class CriarCommand(
     }
 
     private fun startCreation(context: CommandContext, ws: WhatsAppService) {
+        log.info("Iniciando criação de pelada para {} ({})", context.senderName, context.from)
         sessionManager.startCreatingPelada(context.from)
         selectSport(context, ws)
     }
@@ -65,17 +66,19 @@ class CriarCommand(
     }
 
     private fun handleSportSelected(context: CommandContext, ws: WhatsAppService, sport: String) {
+        log.info("Esporte selecionado: {} por {}", sport, context.from)
         if (sessionManager.getSession(context.from) == null) {
             sessionManager.startCreatingPelada(context.from)
         }
         sessionManager.updateSession(context.from, "esporte", sport, "descricao")
         ws.sendMessage(
             context.from,
-            "\uD83D\uDCDD *Descrição da pelada*\n\nDigite uma breve descrição.\n_Ex: Pelada de quarta na praia_"
+            "\uD83D\uDCDD *Descrição da pelada*\n\nDigite uma breve descrição.\n_Ex: Pelada de quarta na praia_\n\n_Digite *cancelar* para voltar ao menu._"
         )
     }
 
     private fun handleInput(context: CommandContext, ws: WhatsAppService, field: String) {
+        log.info("Input recebido campo=[{}] valor=\"{}\" de {}", field, context.args.drop(1).joinToString(" "), context.from)
         val value = context.args.drop(1).joinToString(" ")
         val session = sessionManager.getSession(context.from) ?: run {
             startCreation(context, ws)
@@ -87,14 +90,14 @@ class CriarCommand(
                 sessionManager.updateSession(context.from, "descricao", value, "local")
                 ws.sendMessage(
                     context.from,
-                    "\uD83D\uDCCD *Local da pelada*\n\nDigite o endereço ou nome do local.\n_Ex: Quadra Arena Beach — Boa Viagem_"
+                    "\uD83D\uDCCD *Local da pelada*\n\nDigite o endereço ou nome do local.\n_Ex: Quadra Arena Beach — Boa Viagem_\n\n_Digite *cancelar* para voltar ao menu._"
                 )
             }
             "local" -> {
                 sessionManager.updateSession(context.from, "local", value, "dataHora")
                 ws.sendMessage(
                     context.from,
-                    "\uD83D\uDCC5 *Data e horário*\n\nDigite no formato *DD/MM HH:MM*\n_Ex: 15/08 19:00_"
+                    "\uD83D\uDCC5 *Data e horário*\n\nDigite no formato *DD/MM HH:MM*\n_Ex: 15/08 19:00_\n\n_Digite *cancelar* para voltar ao menu._"
                 )
             }
             "dataHora" -> {
@@ -146,7 +149,7 @@ class CriarCommand(
                 sessionManager.updateSession(context.from, "maxPlayers", max.toString(), "price")
                 ws.sendMessage(
                     context.from,
-                    "\uD83D\uDCB0 *Valor por jogador*\n\nDigite o valor em reais.\n_Ex: 25_\n\nDigite *0* para pelada gratuita.\n_Mínimo R$ 10 · Máximo R$ 100_"
+                    "\uD83D\uDCB0 *Valor por jogador*\n\nDigite o valor em reais.\n_Ex: 25_\n\nDigite *0* para pelada gratuita.\n_Mínimo R$ 10 · Máximo R$ 100_\n\n_Digite *cancelar* para voltar ao menu._"
                 )
             }
             "price" -> {
@@ -167,7 +170,7 @@ class CriarCommand(
                     sessionManager.updateSession(context.from, "price", price.toString(), "pixKey")
                     ws.sendMessage(
                         context.from,
-                        "\uD83D\uDCF2 *Chave Pix*\n\nDigite a chave Pix para receber os pagamentos.\n\n_Os valores serão repassados com taxa de 10% da plataforma._"
+                        "\uD83D\uDCF2 *Chave Pix*\n\nDigite a chave Pix para receber os pagamentos.\n\n_Os valores serão repassados com taxa de 10% da plataforma._\n\n_Digite *cancelar* para voltar ao menu._"
                     )
                 } else {
                     sessionManager.updateSession(context.from, "price", price.toString(), null)
@@ -203,7 +206,7 @@ class CriarCommand(
         sessionManager.updateSession(context.from, "maxPlayers", max, "price")
         ws.sendMessage(
             context.from,
-            "\uD83D\uDCB0 *Valor por jogador*\n\nDigite o valor em reais.\n_Ex: 25_\n\nDigite *0* para pelada gratuita.\n_Mínimo R$ 10 · Máximo R$ 100_"
+            "\uD83D\uDCB0 *Valor por jogador*\n\nDigite o valor em reais.\n_Ex: 25_\n\nDigite *0* para pelada gratuita.\n_Mínimo R$ 10 · Máximo R$ 100_\n\n_Digite *cancelar* para voltar ao menu._"
         )
     }
 
@@ -244,6 +247,7 @@ class CriarCommand(
     }
 
     private fun confirm(context: CommandContext, ws: WhatsAppService) {
+        log.info("Confirmando criação de pelada para {}", context.from)
         val session = sessionManager.getSession(context.from)
         if (session == null) {
             ws.sendMessage(context.from, "\u26A0\uFE0F Sessão expirada. Inicie novamente com /criar.")
@@ -263,6 +267,7 @@ class CriarCommand(
                 throw IllegalArgumentException("Chave Pix obrigatória para peladas pagas")
             }
 
+            log.info("Criando pelada: esporte={}, local={}, data={}, jogadores={}, valor={}", esporte, fields["local"], dateTime, maxPlayers, price)
             val pelada = peladaService.create(
                 phone = context.from,
                 request = CreatePeladaRequest(
@@ -277,6 +282,7 @@ class CriarCommand(
             )
 
             sessionManager.clear(context.from)
+            log.info("Pelada criada com sucesso! Código: {} por {}", pelada.codigo, context.from)
 
             ws.sendMessage(
                 context.from,
@@ -313,6 +319,7 @@ class CriarCommand(
     }
 
     private fun cancelCreation(context: CommandContext, ws: WhatsAppService) {
+        log.info("Criação de pelada cancelada por {}", context.from)
         sessionManager.clear(context.from)
         ws.sendMessage(context.from, "\u274C Criação cancelada.")
         ws.sendButtons(

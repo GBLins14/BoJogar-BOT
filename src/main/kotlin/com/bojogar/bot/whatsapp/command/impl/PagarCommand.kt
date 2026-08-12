@@ -42,6 +42,7 @@ class PagarCommand(
     }
 
     private fun showPendingPayments(context: CommandContext, ws: WhatsAppService) {
+        log.info("Buscando pagamentos pendentes para {}", context.from)
         val pending = pagamentoService.getUserPendingPayments(context.from)
 
         if (pending.isEmpty()) {
@@ -175,6 +176,7 @@ class PagarCommand(
     }
 
     private fun gerarPix(context: CommandContext, ws: WhatsAppService) {
+        log.info("Gerando PIX para {} na pelada {}", context.from, context.args.getOrNull(1))
         val code = context.args.getOrNull(1) ?: return showPendingPayments(context, ws)
 
         val pelada = peladaService.findByCode(code)
@@ -199,7 +201,7 @@ class PagarCommand(
             sessionManager.setCurrentPelada(context.from, code, ConversationState.ENTERING_CPF)
             ws.sendMessage(
                 context.from,
-                "\uD83D\uDCCB *CPF Necessário*\n\nPara gerar o PIX, precisamos do seu CPF.\n\nDigite os *11 dígitos* do seu CPF:"
+                "\uD83D\uDCCB *CPF Necessário*\n\nPara gerar o PIX, precisamos do seu CPF.\n\nDigite os *11 dígitos* do seu CPF:\n\n_Digite *cancelar* para voltar ao menu._"
             )
             return
         }
@@ -208,6 +210,7 @@ class PagarCommand(
     }
 
     private fun handleCpfInput(context: CommandContext, ws: WhatsAppService) {
+        log.info("CPF recebido de {} para pelada {}", context.from, context.args.getOrNull(1))
         val code = context.args.getOrNull(1) ?: return showPendingPayments(context, ws)
         val rawCpf = context.args.getOrNull(2) ?: return showPendingPayments(context, ws)
 
@@ -260,6 +263,7 @@ class PagarCommand(
 
         when (result) {
             is PixGenerationResult.Success -> {
+                log.info("PIX gerado com sucesso para {} na pelada {}", context.from, code)
                 val pelada = peladaService.findByCode(code)
                 ws.sendMessage(
                     context.from,
@@ -284,6 +288,7 @@ class PagarCommand(
                 )
             }
             is PixGenerationResult.Error -> {
+                log.error("Erro ao gerar PIX para {} na pelada {}: {}", context.from, code, result.message)
                 ws.sendMessage(context.from, "\u274C Erro ao gerar o PIX. Tente novamente.")
                 ws.sendButtons(
                     to = context.from,

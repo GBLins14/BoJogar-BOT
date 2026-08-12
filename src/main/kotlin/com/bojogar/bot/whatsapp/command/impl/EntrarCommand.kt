@@ -39,16 +39,19 @@ class EntrarCommand(
     }
 
     private fun askForCode(context: CommandContext, ws: WhatsAppService) {
+        log.info("Solicitando código de pelada para {}", context.from)
         sessionManager.startEnteringCode(context.from)
         ws.sendMessage(
             context.from,
-            "\uD83D\uDD11 *Entrar em uma Pelada*\n\nDigite o código da pelada (6 caracteres):"
+            "\uD83D\uDD11 *Entrar em uma Pelada*\n\nDigite o código da pelada (6 caracteres):\n\n_Digite *cancelar* para voltar ao menu._"
         )
     }
 
     private fun showPeladaDetails(context: CommandContext, ws: WhatsAppService, code: String) {
+        log.info("Exibindo detalhes da pelada {} para {}", code, context.from)
         val pelada = peladaService.findByCode(code)
         if (pelada == null) {
+            log.info("Pelada {} não encontrada", code)
             ws.sendMessage(context.from, "\u26A0\uFE0F Pelada *$code* não encontrada. Verifique o código e tente novamente.")
             ws.sendButtons(
                 to = context.from,
@@ -92,8 +95,10 @@ class EntrarCommand(
     }
 
     private fun confirmJoin(context: CommandContext, ws: WhatsAppService, code: String) {
+        log.info("Tentando inscrever {} na pelada {}", context.from, code)
         when (val result = participantService.join(context.from, code)) {
             is JoinResult.Confirmed -> {
+                log.info("Inscrição confirmada: {} na pelada {}", context.from, code)
                 val pelada = result.pelada
                 ws.sendMessage(
                     context.from,
@@ -115,6 +120,7 @@ class EntrarCommand(
                 )
             }
             is JoinResult.PendingPayment -> {
+                log.info("Inscrição pendente de pagamento: {} na pelada {}", context.from, code)
                 val pelada = result.pelada
                 ws.sendMessage(
                     context.from,
@@ -138,6 +144,7 @@ class EntrarCommand(
                 )
             }
             is JoinResult.Waitlisted -> {
+                log.info("Lista de espera: {} na posição #{} na pelada {}", context.from, result.position, code)
                 ws.sendMessage(
                     context.from,
                     buildString {
@@ -157,6 +164,7 @@ class EntrarCommand(
                 )
             }
             is JoinResult.AlreadyJoined -> {
+                log.info("Já inscrito: {} na pelada {}", context.from, code)
                 ws.sendMessage(context.from, "\u26A0\uFE0F Você já está inscrito nesta pelada!")
                 ws.sendButtons(
                     to = context.from,
@@ -168,6 +176,7 @@ class EntrarCommand(
                 )
             }
             is JoinResult.PeladaClosed -> {
+                log.info("Pelada {} fechada para inscrições, tentativa de {}", code, context.from)
                 ws.sendMessage(context.from, "\u274C Esta pelada não está aberta para inscrições.")
                 ws.sendButtons(
                     to = context.from,

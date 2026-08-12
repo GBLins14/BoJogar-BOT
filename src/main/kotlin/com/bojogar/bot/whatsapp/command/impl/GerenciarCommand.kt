@@ -62,6 +62,7 @@ class GerenciarCommand(
     }
 
     private fun showManagedPeladas(context: CommandContext, ws: WhatsAppService) {
+        log.info("Listando peladas gerenciadas por {}", context.from)
         val managed = authorizationService.getManagedPeladas(context.from)
 
         if (managed.isEmpty()) {
@@ -118,6 +119,7 @@ class GerenciarCommand(
     }
 
     private fun showPeladaAdminFor(context: CommandContext, ws: WhatsAppService, code: String) {
+        log.info("Exibindo painel admin da pelada {} para {}", code, context.from)
         val pelada = peladaService.findByCode(code) ?: run {
             ws.sendMessage(context.from, "\u26A0\uFE0F Pelada *$code* não encontrada.")
             return
@@ -171,6 +173,7 @@ class GerenciarCommand(
 
     private fun showParticipantes(context: CommandContext, ws: WhatsAppService) {
         val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
+        log.info("Listando participantes da pelada {} por {}", code, context.from)
 
         if (!authorizationService.isAdminOrOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Sem permissão.")
@@ -286,9 +289,11 @@ class GerenciarCommand(
     private fun confirmarRemocao(context: CommandContext, ws: WhatsAppService) {
         val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
         val phone = context.args.getOrNull(2) ?: return showParticipantes(context, ws)
+        log.info("Removendo participante {} da pelada {} por {}", phone, code, context.from)
 
         when (val result = participantService.removeParticipant(context.from, phone, code)) {
             is RemoveResult.Removed -> {
+                log.info("Participante {} removido da pelada {} com sucesso", phone, code)
                 ws.sendMessage(context.from, "\u2705 Participante removido com sucesso.")
 
                 val pelada = peladaService.findByCode(code)
@@ -326,6 +331,7 @@ class GerenciarCommand(
     private fun confirmarPagamento(context: CommandContext, ws: WhatsAppService) {
         val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
         val phone = context.args.getOrNull(2) ?: return showManagedPeladas(context, ws)
+        log.info("Confirmação manual de pagamento: {} na pelada {} por {}", phone, code, context.from)
 
         if (!authorizationService.isAdminOrOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Sem permissão.")
@@ -363,6 +369,7 @@ class GerenciarCommand(
 
     private fun showFinanceiro(context: CommandContext, ws: WhatsAppService) {
         val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
+        log.info("Exibindo financeiro da pelada {} para {}", code, context.from)
 
         if (!authorizationService.isAdminOrOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Sem permissão.")
@@ -451,6 +458,7 @@ class GerenciarCommand(
 
     private fun showEditar(context: CommandContext, ws: WhatsAppService) {
         val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
+        log.info("Exibindo opções de edição da pelada {} para {}", code, context.from)
 
         if (!authorizationService.isAdminOrOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Sem permissão.")
@@ -501,6 +509,7 @@ class GerenciarCommand(
         val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
         val field = context.args.getOrNull(2) ?: return showEditar(context, ws)
         val value = context.args.drop(3).joinToString(" ")
+        log.info("Editando campo [{}] da pelada {} para \"{}\" por {}", field, code, value, context.from)
 
         if (!authorizationService.isAdminOrOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Sem permissão.")
@@ -520,7 +529,7 @@ class GerenciarCommand(
                 "chavePix" -> "nova chave Pix"
                 else -> "novo valor"
             }
-            ws.sendMessage(context.from, "\u270F\uFE0F Digite o $label:")
+            ws.sendMessage(context.from, "\u270F\uFE0F Digite o $label:\n\n_Digite *cancelar* para voltar ao menu._")
             return
         }
 
@@ -558,6 +567,7 @@ class GerenciarCommand(
 
             peladaService.update(code, context.from, request)
             sessionManager.clear(context.from)
+            log.info("Campo [{}] da pelada {} atualizado com sucesso", field, code)
 
             val fieldLabel = when (field) {
                 "local" -> "Local"
@@ -619,6 +629,7 @@ class GerenciarCommand(
 
     private fun confirmarCancelamento(context: CommandContext, ws: WhatsAppService) {
         val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
+        log.info("Cancelamento de pelada {} solicitado por {}", code, context.from)
 
         if (!authorizationService.isOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Apenas o organizador pode cancelar a pelada.")
@@ -630,6 +641,7 @@ class GerenciarCommand(
             val pelada = peladaService.cancel(code, context.from)
 
             notificationService.notifyPeladaCancelled(pelada, participants)
+            log.info("Pelada {} cancelada por {} — {} participantes notificados", code, context.from, participants.size)
 
             ws.sendMessage(
                 context.from,
@@ -652,6 +664,7 @@ class GerenciarCommand(
 
     private fun solicitarSaque(context: CommandContext, ws: WhatsAppService) {
         val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
+        log.info("Solicitação de saque da pelada {} por {}", code, context.from)
 
         if (!authorizationService.isAdminOrOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Sem permissão.")
@@ -714,6 +727,7 @@ class GerenciarCommand(
 
     private fun showConvidar(context: CommandContext, ws: WhatsAppService) {
         val code = context.args.getOrNull(1) ?: return showManagedPeladas(context, ws)
+        log.info("Gerando link de convite da pelada {} por {}", code, context.from)
 
         if (!authorizationService.isAdminOrOwner(context.from, code)) {
             ws.sendMessage(context.from, "\u274C Sem permissão.")

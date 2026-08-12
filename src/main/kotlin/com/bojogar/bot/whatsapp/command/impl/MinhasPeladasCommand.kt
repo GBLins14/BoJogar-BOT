@@ -15,6 +15,7 @@ import com.bojogar.bot.whatsapp.model.Button
 import com.bojogar.bot.whatsapp.model.ListRow
 import com.bojogar.bot.whatsapp.model.ListSection
 import com.bojogar.bot.whatsapp.service.WhatsAppService
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
 import java.time.LocalDateTime
@@ -33,6 +34,7 @@ class MinhasPeladasCommand(
     override val name = "/minhas"
 
     companion object {
+        private val log = LoggerFactory.getLogger(MinhasPeladasCommand::class.java)
         private val DATE_FMT_SHORT = DateTimeFormatter.ofPattern("EEE dd/MM - HH'h'", Locale("pt", "BR"))
         private val DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
     }
@@ -66,6 +68,7 @@ class MinhasPeladasCommand(
     }
 
     private fun showProximas(context: CommandContext, ws: WhatsAppService) {
+        log.info("Listando próximas peladas de {}", context.from)
         val participations = participantService.getUserParticipations(context.from)
         val peladaMap = fetchPeladaMap(participations)
 
@@ -155,6 +158,7 @@ class MinhasPeladasCommand(
     }
 
     private fun showDetalhes(context: CommandContext, ws: WhatsAppService) {
+        log.info("Exibindo detalhes da inscrição de {} na pelada {}", context.from, context.args.getOrNull(1))
         val codigo = context.args.getOrNull(1)
         if (codigo == null) {
             showProximas(context, ws)
@@ -224,9 +228,11 @@ class MinhasPeladasCommand(
 
     private fun confirmarCancelamento(context: CommandContext, ws: WhatsAppService) {
         val codigo = context.args.getOrNull(1) ?: return showProximas(context, ws)
+        log.info("Cancelando inscrição de {} na pelada {}", context.from, codigo)
 
         when (val result = participantService.leave(context.from, codigo)) {
             is LeaveResult.Left -> {
+                log.info("Inscrição cancelada: {} saiu da pelada {}", context.from, codigo)
                 ws.sendMessage(
                     context.from,
                     buildString {
@@ -261,6 +267,7 @@ class MinhasPeladasCommand(
     }
 
     private fun showHistorico(context: CommandContext, ws: WhatsAppService) {
+        log.info("Exibindo histórico de peladas de {}", context.from)
         val all = participantService.getUserParticipations(context.from, activeOnly = false)
         val peladaMap = fetchPeladaMap(all)
 

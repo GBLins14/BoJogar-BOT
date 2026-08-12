@@ -10,6 +10,7 @@ import com.bojogar.bot.whatsapp.model.Button
 import com.bojogar.bot.whatsapp.model.ListRow
 import com.bojogar.bot.whatsapp.model.ListSection
 import com.bojogar.bot.whatsapp.service.WhatsAppService
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -26,6 +27,7 @@ class ContaCommand(
     override val aliases = listOf("/perfil")
 
     companion object {
+        private val log = LoggerFactory.getLogger(ContaCommand::class.java)
         private val DATE_FMT_SHORT = DateTimeFormatter.ofPattern("EEE dd/MM - HH'h'", Locale("pt", "BR"))
     }
 
@@ -42,6 +44,7 @@ class ContaCommand(
     }
 
     private fun showConta(context: CommandContext, ws: WhatsAppService) {
+        log.info("Exibindo conta de {}", context.from)
         val user = userService.findByPhone(context.from)
 
         val allParticipations = participantService.getUserParticipations(context.from, activeOnly = false)
@@ -151,6 +154,7 @@ class ContaCommand(
     }
 
     private fun confirmarReset(context: CommandContext, ws: WhatsAppService) {
+        log.info("Resetando conta de {}", context.from)
         val participations = participantService.getUserParticipations(context.from)
         var cancelled = 0
 
@@ -158,6 +162,8 @@ class ContaCommand(
             val result = participantService.leave(context.from, p.peladaCodigo)
             if (result is com.bojogar.bot.service.LeaveResult.Left) cancelled++
         }
+
+        log.info("Conta resetada: {} inscrições canceladas para {}", cancelled, context.from)
 
         ws.sendMessage(
             context.from,

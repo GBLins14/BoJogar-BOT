@@ -24,16 +24,17 @@ class CommandProcessor(
 
         val command = registry.findCommand(commandName)
         if (command == null) {
-            log.warn("Command not found: {}", commandName)
+            log.warn("Comando não encontrado: \"{}\" de {} ({})", commandName, context.senderName, context.from)
             return false
         }
 
-        log.info("Executing command [{}] from {} ({})", commandName, context.senderName, context.from)
+        log.info("Executando comando [{}] args={} | De: {} ({})", commandName, args, context.senderName, context.from)
 
         try {
             command.execute(context.copy(args = args), whatsappService)
+            log.info("Comando [{}] executado com sucesso para {}", commandName, context.from)
         } catch (e: Exception) {
-            log.error("Error executing command {}: {}", commandName, e.message, e)
+            log.error("Erro ao executar comando [{}] para {}: {}", commandName, context.from, e.message, e)
             whatsappService.sendMessage(context.from, "Ocorreu um erro. Tente novamente.")
         }
 

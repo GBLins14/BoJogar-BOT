@@ -47,7 +47,7 @@ class MessageHandler(
                 .forEach { change ->
                     val incomingPhoneId = change.value.metadata?.phone_number_id
                     if (incomingPhoneId != null && incomingPhoneId != whatsAppProperties.phoneNumberId) {
-                        log.debug("Ignoring message for phone_number_id {} (expected {})", incomingPhoneId, whatsAppProperties.phoneNumberId)
+                        log.info("Mensagem ignorada: phone_number_id {} não corresponde ao bot (esperado {})", incomingPhoneId, whatsAppProperties.phoneNumberId)
                         return@forEach
                     }
                     change.value.messages?.forEach { message ->
@@ -74,7 +74,8 @@ class MessageHandler(
     }
 
     private fun processMessage(message: IncomingMessage, senderName: String) {
-        log.info("Received [{}] from {} ({})", message.type, senderName, message.from)
+        log.info("========== NOVA MENSAGEM ==========")
+        log.info("Tipo: [{}] | De: {} ({}) | ID: {}", message.type, senderName, message.from, message.id)
 
         // Auto-create user on every interaction
         try {
@@ -88,20 +89,26 @@ class MessageHandler(
             "interactive" -> {
                 val replyId = message.interactive?.button_reply?.id
                     ?: message.interactive?.list_reply?.id
-                log.info("Interactive reply: {}", replyId)
+                log.info("Mensagem recebida (interactive): \"{}\"", replyId)
                 replyId
             }
             "button" -> {
                 val payload = message.button?.payload
-                log.info("Button reply: {}", payload)
+                log.info("Mensagem recebida (button): \"{}\"", payload)
                 payload
             }
-            "text" -> message.text?.body
-            else -> null
+            "text" -> {
+                log.info("Mensagem recebida (text): \"{}\"", message.text?.body)
+                message.text?.body
+            }
+            else -> {
+                log.info("Mensagem recebida ({}): tipo não suportado", message.type)
+                null
+            }
         }
 
         if (rawMessage.isNullOrBlank()) {
-            log.debug("Unsupported message type [{}] from {}, ignoring", message.type, message.from)
+            log.info("Mensagem ignorada: tipo [{}] não suportado de {}", message.type, message.from)
             return
         }
 
@@ -114,6 +121,7 @@ class MessageHandler(
         )
 
         // Route the message
+        log.info("Roteando mensagem: \"{}\"", rawMessage.trim())
         routeMessage(context, rawMessage.trim())
 
         // Mark as read
@@ -127,6 +135,7 @@ class MessageHandler(
     private fun routeMessage(context: CommandContext, rawMessage: String) {
         // 1. Explicit command (starts with /)
         if (rawMessage.startsWith("/")) {
+            log.info("Comando detectado: \"{}\"", rawMessage)
             // Don't clear session for commands that are part of an active creation/editing flow
             val session = sessionManager.getSession(context.from)
             val isFlowCommand = session != null && session.state != ConversationState.IDLE && (
@@ -147,6 +156,15 @@ class MessageHandler(
         // 2. Active session — route to appropriate handler
         val session = sessionManager.getSession(context.from)
         if (session != null && session.state != ConversationState.IDLE) {
+            // Check if user wants to cancel the current flow
+            if (rawMessage.equals("cancelar", ignoreCase = true)) {
+                log.info("Usuário {} cancelou a sessão ativa [{}]", context.from, session.state)
+                sessionManager.clear(context.from)
+                whatsappService.sendMessage(context.from, "\u274C Ação cancelada.")
+                commandProcessor.process(context.copy(rawMessage = "/start"))
+                return
+            }
+            log.info("Sessão ativa [{}] para {} — roteando input: \"{}\"", session.state, context.from, rawMessage)
             when (session.state) {
                 ConversationState.CREATING_PELADA -> {
                     val nextField = session.nextField ?: "esporte"
@@ -174,13 +192,13 @@ class MessageHandler(
 
         // 3. Check if message looks like a pelada invite code
         if (PELADA_CODE_PATTERN.matches(rawMessage)) {
-            log.info("Detected possible pelada code: {}", rawMessage)
+            log.info("Código de pelada detectado: \"{}\" — redirecionando para /entrar", rawMessage)
             commandProcessor.process(context.copy(rawMessage = "/entrar ${rawMessage.uppercase()}"))
             return
         }
 
         // 4. Fallback to /start
-        log.info("No command or session, falling back to /start for {}", context.from)
+        log.info("Nenhum comando ou sessão ativa — redirecionando {} para /start", context.from)
         commandProcessor.process(context.copy(rawMessage = "/start"))
     }
 }

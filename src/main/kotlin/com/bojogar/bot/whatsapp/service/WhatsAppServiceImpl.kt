@@ -2,6 +2,7 @@ package com.bojogar.bot.whatsapp.service
 
 import com.bojogar.bot.whatsapp.client.WhatsAppClient
 import com.bojogar.bot.whatsapp.model.*
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
 @Service
@@ -9,7 +10,12 @@ class WhatsAppServiceImpl(
     private val client: WhatsAppClient
 ) : WhatsAppService {
 
+    companion object {
+        private val log = LoggerFactory.getLogger(WhatsAppServiceImpl::class.java)
+    }
+
     override fun sendMessage(to: String, text: String) {
+        log.info("Enviando mensagem de texto para {}: \"{}\"", to, text.take(80).replace("\n", " "))
         client.sendPayload(
             MessagePayload(
                 to = to,
@@ -26,6 +32,7 @@ class WhatsAppServiceImpl(
         header: String?,
         footer: String?
     ) {
+        log.info("Enviando botões para {}: [{}]", to, buttons.joinToString(", ") { it.title })
         client.sendPayload(
             MessagePayload(
                 to = to,
@@ -53,6 +60,8 @@ class WhatsAppServiceImpl(
         header: String?,
         footer: String?
     ) {
+        val totalRows = sections.sumOf { it.rows.size }
+        log.info("Enviando lista para {}: {} seções, {} itens", to, sections.size, totalRows)
         client.sendPayload(
             MessagePayload(
                 to = to,
@@ -83,6 +92,7 @@ class WhatsAppServiceImpl(
     }
 
     override fun markAsRead(messageId: String) {
+        log.debug("Marcando mensagem {} como lida", messageId)
         client.markAsRead(messageId)
     }
 }

@@ -9,6 +9,7 @@ import com.bojogar.bot.whatsapp.model.ListRow
 import com.bojogar.bot.whatsapp.model.ListSection
 import com.bojogar.bot.whatsapp.service.WhatsAppService
 import com.bojogar.bot.whatsapp.session.SessionManager
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
 @Component
@@ -21,7 +22,12 @@ class StartCommand(
     override val name = "/start"
     override val aliases = listOf("/inicio", "/menu")
 
+    companion object {
+        private val log = LoggerFactory.getLogger(StartCommand::class.java)
+    }
+
     override fun execute(context: CommandContext, whatsappService: WhatsAppService) {
+        log.info("Menu principal exibido para {} ({})", context.senderName, context.from)
         sessionManager.clear(context.from)
 
         val nome = context.senderName.ifBlank { "jogador" }
@@ -66,6 +72,19 @@ class StartCommand(
             )
         }
 
+        val helpRows = listOf(
+            ListRow(
+                id = "/ajuda",
+                title = "\u2753 Como Funciona",
+                description = "Aprenda a usar o BoJogar"
+            ),
+            ListRow(
+                id = "/ajuda suporte",
+                title = "\uD83D\uDCDE Suporte",
+                description = "Fale com a nossa equipe"
+            )
+        )
+
         whatsappService.sendList(
             to = context.from,
             header = "\u26BD BoJogar",
@@ -79,6 +98,10 @@ class StartCommand(
                 ListSection(
                     title = "Menu Principal",
                     rows = rows
+                ),
+                ListSection(
+                    title = "Ajuda",
+                    rows = helpRows
                 )
             ),
             footer = "BoJogar | v2.0"
