@@ -1,5 +1,6 @@
 package com.bojogar.bot.whatsapp.command.impl
 
+import com.bojogar.bot.service.PagamentoService
 import com.bojogar.bot.service.ParticipantService
 import com.bojogar.bot.service.PeladaService
 import com.bojogar.bot.service.UserService
@@ -10,6 +11,7 @@ import com.bojogar.bot.whatsapp.model.Button
 import com.bojogar.bot.whatsapp.service.WhatsAppService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -17,7 +19,8 @@ import java.time.ZoneId
 class ContaCommand(
     private val userService: UserService,
     private val participantService: ParticipantService,
-    private val peladaService: PeladaService
+    private val peladaService: PeladaService,
+    private val pagamentoService: PagamentoService
 ) : BotCommand {
 
     override val name = "/conta"
@@ -58,6 +61,7 @@ class ContaCommand(
         val name = user?.name ?: context.senderName
         val phone = PhoneUtils.formatPhoneDisplay(context.from)
         val playedLabel = if (played == 1) "1 pelada" else "$played peladas"
+        val walletBalance = pagamentoService.getOrganizerWalletBalance(context.from)
 
         ws.sendButtons(
             to = context.from,
@@ -66,7 +70,10 @@ class ContaCommand(
                 append("\uD83D\uDCDD *Nome:* $name\n")
                 append("\uD83D\uDCF1 *Telefone:* $phone\n")
                 append("\u26BD *Peladas ativas:* $active\n")
-                append("\uD83D\uDCCA *Jogou:* $playedLabel")
+                append("\uD83D\uDCCA *Jogou:* $playedLabel\n")
+                if (walletBalance > BigDecimal.ZERO) {
+                    append("\uD83D\uDCB0 *Saldo:* R$ $walletBalance")
+                }
             },
             buttons = listOf(
                 Button(id = "/minhas proximas", title = "\uD83D\uDCC5 Minhas Peladas"),
