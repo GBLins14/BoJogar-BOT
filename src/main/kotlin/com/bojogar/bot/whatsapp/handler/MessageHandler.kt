@@ -1,5 +1,6 @@
 package com.bojogar.bot.whatsapp.handler
 
+import com.bojogar.bot.config.WhatsAppProperties
 import com.bojogar.bot.service.UserService
 import com.bojogar.bot.whatsapp.command.CommandContext
 import com.bojogar.bot.whatsapp.command.CommandProcessor
@@ -20,7 +21,8 @@ class MessageHandler(
     private val commandProcessor: CommandProcessor,
     private val whatsappService: WhatsAppService,
     private val sessionManager: SessionManager,
-    private val userService: UserService
+    private val userService: UserService,
+    private val whatsAppProperties: WhatsAppProperties
 ) {
 
     companion object {
@@ -43,6 +45,11 @@ class MessageHandler(
             entry.changes
                 .filter { it.field == "messages" }
                 .forEach { change ->
+                    val incomingPhoneId = change.value.metadata?.phone_number_id
+                    if (incomingPhoneId != null && incomingPhoneId != whatsAppProperties.phoneNumberId) {
+                        log.debug("Ignoring message for phone_number_id {} (expected {})", incomingPhoneId, whatsAppProperties.phoneNumberId)
+                        return@forEach
+                    }
                     change.value.messages?.forEach { message ->
                         if (isDuplicate(message.id)) {
                             log.debug("Skipping duplicate message {}", message.id)
