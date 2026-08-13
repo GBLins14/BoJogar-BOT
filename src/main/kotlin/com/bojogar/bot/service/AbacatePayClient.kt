@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.core.ParameterizedTypeReference
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
+import tools.jackson.databind.json.JsonMapper
 import java.math.BigDecimal
 
 @Component
@@ -37,7 +38,8 @@ class AbacatePayClient(
             )
         )
 
-        log.info("Generating PIX via AbacatePay - amount: {} ({}c), customer: {}", amount, amountCents, customer.taxId)
+        val jsonBody = JsonMapper.builder().build().writeValueAsString(request)
+        log.info("Generating PIX via AbacatePay - amount: {} ({}c), body: {}", amount, amountCents, jsonBody)
 
         val envelope = restClient.post()
             .uri("/transparents/create")
