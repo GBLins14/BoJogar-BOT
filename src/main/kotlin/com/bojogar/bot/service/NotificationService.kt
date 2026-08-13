@@ -13,7 +13,8 @@ import java.math.BigDecimal
 @Service
 class NotificationService(
     private val whatsappService: WhatsAppService,
-    private val participantService: ParticipantService
+    private val participantService: ParticipantService,
+    private val pushoverClient: PushoverClient
 ) {
 
     companion object {
@@ -161,5 +162,10 @@ class NotificationService(
                 log.warn("Failed to notify admin {}: {}", admin.userPhone, e.message)
             }
         }
+
+        pushoverClient.send(
+            title = "Pagamento Recebido - $peladaCode",
+            message = "$participantName pagou R$ $amount na pelada $peladaCode"
+        )
     }
 }
