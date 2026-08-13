@@ -16,6 +16,7 @@ class PaymentMapper {
         status = entity.status.name,
         transactionId = entity.transactionId,
         paidAt = entity.paidAt,
-        pixCode = entity.pixCode
+        pixCode = entity.pixCode,
+        pixGeneratedAt = entity.pixGeneratedAt
     )
 }

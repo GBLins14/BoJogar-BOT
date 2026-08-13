@@ -11,6 +11,8 @@ import com.bojogar.bot.whatsapp.session.ConversationState
 import com.bojogar.bot.whatsapp.session.SessionManager
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import java.time.Duration
+import java.time.Instant
 
 @Component
 class PagarCommand(
@@ -78,7 +80,8 @@ class PagarCommand(
                 ListSection(
                     title = "Pendentes",
                     rows = peladasWithPending.take(10).map { (pelada, payment) ->
-                        val icon = if (payment.pixCode != null) "\uD83D\uDFE2" else "\uD83D\uDFE1"
+                        val hasValidPix = payment.pixCode != null && !isPixExpired(payment.pixGeneratedAt)
+                        val icon = if (hasValidPix) "\uD83D\uDFE2" else "\uD83D\uDFE1"
                         ListRow(
                             id = "/pagar ver ${pelada.codigo}",
                             title = "$icon ${pelada.esporteLabel} — ${pelada.codigo}",
@@ -113,14 +116,18 @@ class PagarCommand(
             return
         }
 
-        if (payment.pixCode != null) {
+        val pixExpired = payment.pixCode != null && isPixExpired(payment.pixGeneratedAt)
+
+        if (payment.pixCode != null && !pixExpired) {
+            val remaining = formatRemainingTime(payment.pixGeneratedAt)
             ws.sendMessage(
                 context.from,
                 buildString {
                     append("\uD83D\uDCB0 *Pagamento — ${pelada.codigo}*\n\n")
                     append("\uD83C\uDFC6 ${pelada.esporteLabel}\n")
                     append("\uD83D\uDCCD ${pelada.local}\n")
-                    append("\uD83D\uDCB5 *Valor:* R$ ${payment.valor}\n\n")
+                    append("\uD83D\uDCB5 *Valor:* R$ ${payment.valor}\n")
+                    append("\u23F1\uFE0F *Expira em:* $remaining\n\n")
                     append("\uD83D\uDCF2 *PIX Copia e Cola:*\n")
                     append("_Copie o código abaixo e cole no app do seu banco:_")
                 }
@@ -130,6 +137,26 @@ class PagarCommand(
                 to = context.from,
                 body = "Após o pagamento, a confirmação é automática!",
                 buttons = listOf(
+                    Button(id = "/minhas proximas", title = "Minhas Peladas"),
+                    Button(id = "/start", title = "Menu")
+                )
+            )
+        } else if (pixExpired) {
+            ws.sendMessage(
+                context.from,
+                buildString {
+                    append("\u26A0\uFE0F *PIX Expirado — ${pelada.codigo}*\n\n")
+                    append("\uD83C\uDFC6 ${pelada.esporteLabel}\n")
+                    append("\uD83D\uDCCD ${pelada.local}\n")
+                    append("\uD83D\uDCB5 *Valor:* R$ ${payment.valor}\n\n")
+                    append("O código PIX anterior expirou.\nGere um novo para efetuar o pagamento.")
+                }
+            )
+            ws.sendButtons(
+                to = context.from,
+                body = "Deseja gerar um novo PIX?",
+                buttons = listOf(
+                    Button(id = "/pagar gerar $code", title = "Gerar Novo PIX"),
                     Button(id = "/minhas proximas", title = "Minhas Peladas"),
                     Button(id = "/start", title = "Menu")
                 )
@@ -254,8 +281,9 @@ class PagarCommand(
                         append("\u2705 *PIX Gerado!*\n\n")
                         if (pelada != null) {
                             append("\uD83C\uDFC6 ${pelada.esporteLabel} — ${pelada.codigo}\n")
-                            append("\uD83D\uDCB5 *Valor:* R$ ${pelada.valorPorJogador}\n\n")
+                            append("\uD83D\uDCB5 *Valor:* R$ ${pelada.valorPorJogador}\n")
                         }
+                        append("\u23F1\uFE0F *Expira em:* 30 minutos\n\n")
                         append("\uD83D\uDCF2 *PIX Copia e Cola:*\n")
                         append("_Copie o código abaixo e cole no app do seu banco:_")
                     }
@@ -282,6 +310,20 @@ class PagarCommand(
                 )
             }
         }
+    }
+
+    private fun isPixExpired(pixGeneratedAt: Instant?): Boolean {
+        if (pixGeneratedAt == null) return true
+        return Instant.now().isAfter(pixGeneratedAt.plus(PagamentoService.PIX_EXPIRATION))
+    }
+
+    private fun formatRemainingTime(pixGeneratedAt: Instant?): String {
+        if (pixGeneratedAt == null) return "—"
+        val expiresAt = pixGeneratedAt.plus(PagamentoService.PIX_EXPIRATION)
+        val remaining = Duration.between(Instant.now(), expiresAt)
+        if (remaining.isNegative) return "Expirado"
+        val minutes = remaining.toMinutes()
+        return if (minutes >= 1) "$minutes min" else "menos de 1 min"
     }
 
     private fun sendNoPendingPayments(context: CommandContext, ws: WhatsAppService) {

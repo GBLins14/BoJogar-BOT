@@ -13,5 +13,6 @@ data class PaymentResponse(
     val status: String,
     val transactionId: String?,
     val paidAt: Instant?,
-    val pixCode: String? = null
+    val pixCode: String? = null,
+    val pixGeneratedAt: Instant? = null
 )

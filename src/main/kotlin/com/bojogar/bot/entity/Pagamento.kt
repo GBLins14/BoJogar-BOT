@@ -27,5 +27,7 @@ class Pagamento(
     var syncpayIdentifier: String? = null,
 
     @Column(length = 1000)
-    var pixCode: String? = null
+    var pixCode: String? = null,
+
+    var pixGeneratedAt: Instant? = null
 ) : BaseEntity()

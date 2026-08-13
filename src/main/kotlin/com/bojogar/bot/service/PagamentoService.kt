@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 
@@ -40,6 +41,7 @@ class PagamentoService(
 
     companion object {
         private val log = LoggerFactory.getLogger(PagamentoService::class.java)
+        val PIX_EXPIRATION: Duration = Duration.ofMinutes(30)
     }
 
     @Transactional
@@ -84,9 +86,17 @@ class PagamentoService(
         val payment = payments.firstOrNull { it.status == StatusPagamento.PENDENTE }
             ?: return PixGenerationResult.Error("Pagamento pendente não encontrado")
 
-        // If PIX already generated, return existing code
+        // If PIX already generated and not expired, return existing code
         if (payment.pixCode != null && payment.syncpayIdentifier != null) {
-            return PixGenerationResult.Success(payment.pixCode!!, payment.id!!)
+            val generatedAt = payment.pixGeneratedAt
+            if (generatedAt != null && Instant.now().isBefore(generatedAt.plus(PIX_EXPIRATION))) {
+                return PixGenerationResult.Success(payment.pixCode!!, payment.id!!)
+            }
+            // PIX expired — clear and regenerate
+            log.info("PIX expired for participant {} - regenerating", participantId)
+            payment.pixCode = null
+            payment.syncpayIdentifier = null
+            payment.pixGeneratedAt = null
         }
 
         return try {
@@ -107,6 +117,7 @@ class PagamentoService(
             if (response.pixCode != null && response.identifier != null) {
                 payment.pixCode = response.pixCode
                 payment.syncpayIdentifier = response.identifier
+                payment.pixGeneratedAt = Instant.now()
                 pagamentoRepository.save(payment)
 
                 log.info("PIX generated for participant {} in pelada {} - identifier: {}",
