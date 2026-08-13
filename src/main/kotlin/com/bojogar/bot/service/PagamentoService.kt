@@ -128,6 +128,20 @@ class PagamentoService(
                 log.error("AbacatePay returned empty brCode or id")
                 PixGenerationResult.Error("Erro ao gerar PIX. Tente novamente.")
             }
+        } catch (e: org.springframework.web.client.HttpClientErrorException) {
+            log.error("AbacatePay client error for participant {}: {}", participantId, e.responseBodyAsString, e)
+            val apiError = try {
+                val body = e.responseBodyAsString
+                val errorMsg = body.substringAfter("\"error\":\"").substringBefore("\"")
+                when {
+                    errorMsg.contains("taxId", ignoreCase = true) -> "CPF inválido. Verifique e tente novamente."
+                    errorMsg.isNotBlank() -> "Erro: $errorMsg"
+                    else -> "Erro ao gerar PIX. Tente novamente."
+                }
+            } catch (_: Exception) {
+                "Erro ao gerar PIX. Tente novamente."
+            }
+            PixGenerationResult.Error(apiError)
         } catch (e: Exception) {
             log.error("Failed to generate PIX for participant {}: {}", participantId, e.message, e)
             PixGenerationResult.Error("Erro ao gerar PIX. Tente novamente.")
