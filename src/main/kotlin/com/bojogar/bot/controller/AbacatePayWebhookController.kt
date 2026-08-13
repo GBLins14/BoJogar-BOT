@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.security.MessageDigest
+import java.util.Base64
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -24,7 +25,7 @@ class AbacatePayWebhookController(
 
     @PostMapping
     fun handleWebhook(
-        @RequestHeader("x-abacatepay-signature", required = false) signature: String?,
+        @RequestHeader("X-Webhook-Signature", required = false) signature: String?,
         @RequestBody body: String
     ): ResponseEntity<Void> {
         log.info("AbacatePay webhook received")
@@ -104,9 +105,9 @@ class AbacatePayWebhookController(
     private fun verifyHmac(payload: String, receivedSignature: String): Boolean {
         return try {
             val mac = Mac.getInstance("HmacSHA256")
-            mac.init(SecretKeySpec(abacatePayProperties.webhookSecret.toByteArray(), "HmacSHA256"))
-            val computed = mac.doFinal(payload.toByteArray()).joinToString("") { "%02x".format(it) }
-            MessageDigest.isEqual(computed.lowercase().toByteArray(), receivedSignature.lowercase().toByteArray())
+            mac.init(SecretKeySpec(abacatePayProperties.webhookSecret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+            val computed = Base64.getEncoder().encodeToString(mac.doFinal(payload.toByteArray(Charsets.UTF_8)))
+            MessageDigest.isEqual(computed.toByteArray(), receivedSignature.toByteArray())
         } catch (e: Exception) {
             log.error("Error verifying HMAC: {}", e.message)
             false
