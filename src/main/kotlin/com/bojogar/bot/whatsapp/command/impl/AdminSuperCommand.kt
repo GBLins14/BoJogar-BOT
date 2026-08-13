@@ -1,6 +1,7 @@
 package com.bojogar.bot.whatsapp.command.impl
 
 import com.bojogar.bot.config.AdminProperties
+import com.bojogar.bot.config.SyncPayProperties
 import com.bojogar.bot.enums.ParticipantRole
 import com.bojogar.bot.enums.ParticipantStatus
 import com.bojogar.bot.enums.StatusPagamento
@@ -23,6 +24,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
+import java.math.RoundingMode
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -35,7 +37,8 @@ class AdminSuperCommand(
     private val participantRepository: PeladaParticipantRepository,
     private val pagamentoRepository: PagamentoRepository,
     private val peladaService: PeladaService,
-    private val pagamentoService: PagamentoService
+    private val pagamentoService: PagamentoService,
+    private val syncPayProperties: SyncPayProperties
 ) : BotCommand {
 
     override val name = "/adminsuper"
@@ -43,6 +46,7 @@ class AdminSuperCommand(
     companion object {
         private val log = LoggerFactory.getLogger(AdminSuperCommand::class.java)
         private val ZONE_BR = ZoneId.of("America/Sao_Paulo")
+        private val GATEWAY_FEE_PER_PIX = BigDecimal("0.85")
     }
 
     override fun execute(context: CommandContext, whatsappService: WhatsAppService) {
@@ -259,24 +263,33 @@ class AdminSuperCommand(
             return
         }
 
+        val taxaPercent = syncPayProperties.platformFeePercent
+
         ws.sendMessage(
             context.from,
             buildString {
-                append("\uD83D\uDD12 *Organizadores (${owners.size})*\n\n")
+                append("\uD83D\uDD12 *Organizadores (${owners.size})*\n")
+                append("_Saldo já com taxa de ${taxaPercent}% descontada_\n\n")
                 owners.take(20).forEachIndexed { i, owner ->
                     val peladasCriadas = peladaRepository.findByCreatedByPhone(owner.user.phone)
                     val ativas = peladasCriadas.count { it.status in listOf(StatusPelada.OPEN, StatusPelada.FULL) }
                     val totalPeladas = peladasCriadas.size
 
                     var saldoTotal = BigDecimal.ZERO
+                    var arrecadado = BigDecimal.ZERO
                     peladasCriadas.forEach { pel ->
                         saldoTotal = saldoTotal.add(pagamentoService.getWalletBalance(pel.codigo))
+                        val payments = pagamentoRepository.findByParticipantPeladaCodigo(pel.codigo)
+                        arrecadado = arrecadado.add(
+                            payments.filter { it.status == StatusPagamento.CONFIRMADO }.sumOf { it.valor }
+                        )
                     }
 
                     append("${i + 1}. *${owner.user.name}*\n")
                     append("   \uD83D\uDCF1 ${owner.user.phone}\n")
                     append("   Peladas: $totalPeladas (${ativas} ativas)\n")
-                    append("   Saldo total: R$ $saldoTotal\n\n")
+                    append("   Arrecadado: R$ $arrecadado\n")
+                    append("   Saldo disponível: R$ $saldoTotal\n\n")
                 }
             }
         )
@@ -296,31 +309,52 @@ class AdminSuperCommand(
         val pending = allPayments.filter { it.status == StatusPagamento.PENDENTE }
         val refunded = allPayments.filter { it.status == StatusPagamento.ESTORNADO }
 
-        val totalRevenue = confirmed.sumOf { it.valor }
+        val totalArrecadado = confirmed.sumOf { it.valor }
         val totalPending = pending.sumOf { it.valor }
         val totalRefunded = refunded.sumOf { it.valor }
+        val qtdPixConfirmados = confirmed.size
 
+        // Saldo organizadores (já com taxa da plataforma descontada)
         val peladasComPagamento = confirmed.map { it.participant.pelada.codigo }.distinct()
         var saldoOrganizadores = BigDecimal.ZERO
         peladasComPagamento.forEach { code ->
             saldoOrganizadores = saldoOrganizadores.add(pagamentoService.getWalletBalance(code))
         }
-        val taxasPlataforma = totalRevenue.subtract(saldoOrganizadores).max(BigDecimal.ZERO)
+
+        // Receita plataforma = taxa cobrada dos organizadores
+        val taxaPlataformaPercent = syncPayProperties.platformFeePercent
+        val receitaPlataforma = totalArrecadado
+            .multiply(BigDecimal(taxaPlataformaPercent))
+            .divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
+
+        // Custo gateway = R$ 0.85 por PIX confirmado
+        val custoGateway = GATEWAY_FEE_PER_PIX.multiply(BigDecimal(qtdPixConfirmados))
+
+        // Lucro líquido = receita plataforma - custo gateway
+        val lucroLiquido = receitaPlataforma.subtract(custoGateway).max(BigDecimal.ZERO)
 
         ws.sendMessage(
             context.from,
             buildString {
                 append("\uD83D\uDD12 *Financeiro Geral*\n\n")
-                append("\u2705 *Confirmados:* ${confirmed.size} pagamentos\n")
-                append("\u23F3 *Pendentes:* ${pending.size} pagamentos\n")
-                append("\u21A9\uFE0F *Estornados:* ${refunded.size} pagamentos\n\n")
-                append("\uD83D\uDCB5 *Receita total:* R$ $totalRevenue\n")
-                append("\u23F3 *Pendente:* R$ $totalPending\n")
-                append("\u21A9\uFE0F *Estornado:* R$ $totalRefunded\n\n")
-                append("\uD83D\uDCCA *Distribuição:*\n")
-                append("  Saldo organizadores: R$ $saldoOrganizadores\n")
-                append("  Taxas plataforma: R$ $taxasPlataforma\n")
-                append("  Peladas com pagamento: ${peladasComPagamento.size}\n")
+
+                append("*Transações:*\n")
+                append("  \u2705 Confirmados: $qtdPixConfirmados\n")
+                append("  \u23F3 Pendentes: ${pending.size}\n")
+                append("  \u21A9\uFE0F Estornados: ${refunded.size}\n\n")
+
+                append("*Valores:*\n")
+                append("  \uD83D\uDCB5 Total arrecadado: R$ $totalArrecadado\n")
+                append("  \u23F3 Pendente: R$ $totalPending\n")
+                append("  \u21A9\uFE0F Estornado: R$ $totalRefunded\n\n")
+
+                append("*Distribuição:*\n")
+                append("  \uD83D\uDC51 Saldo organizadores: R$ $saldoOrganizadores\n")
+                append("  \uD83D\uDCB0 Receita plataforma ($taxaPlataformaPercent%): R$ $receitaPlataforma\n")
+                append("  \uD83C\uDFE6 Custo gateway (R$ 0,85 × $qtdPixConfirmados): R$ $custoGateway\n\n")
+
+                append("*\uD83D\uDCB2 Lucro líquido: R$ $lucroLiquido*\n")
+                append("_Peladas com pagamento: ${peladasComPagamento.size}_")
             }
         )
 
