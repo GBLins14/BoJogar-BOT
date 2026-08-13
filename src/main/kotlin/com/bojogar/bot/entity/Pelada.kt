@@ -48,5 +48,5 @@ class Pelada(
     var sportConfig: String? = null,
 
     @Version
-    val version: Long = 0
+    var version: Long = 0
 ) : BaseEntity()

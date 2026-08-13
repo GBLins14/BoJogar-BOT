@@ -103,7 +103,7 @@ class MinhasPeladasCommand(
                         val pel = peladaMap[p.peladaCodigo] ?: return@mapNotNull null
                         ListRow(
                             id = "/minhas ver ${p.peladaCodigo}",
-                            title = "${pel.esporteLabel} \u2014 ${pel.local.take(20)}",
+                            title = "${pel.esporteLabel} \u2014 ${pel.local}".take(24),
                             description = "${UxCopy.formatDateCompact(pel.dataHora)} \u00B7 ${UxCopy.statusJogadorShort("CONFIRMED")}"
                         )
                     }
@@ -119,7 +119,7 @@ class MinhasPeladasCommand(
                         val pel = peladaMap[p.peladaCodigo] ?: return@mapNotNull null
                         ListRow(
                             id = "/minhas ver ${p.peladaCodigo}",
-                            title = "${pel.esporteLabel} \u2014 ${pel.local.take(20)}",
+                            title = "${pel.esporteLabel} \u2014 ${pel.local}".take(24),
                             description = "${UxCopy.formatDateCompact(pel.dataHora)} \u00B7 ${UxCopy.statusJogadorShort("PENDING_PAYMENT")}"
                         )
                     }
@@ -135,7 +135,7 @@ class MinhasPeladasCommand(
                         val pel = peladaMap[p.peladaCodigo] ?: return@mapNotNull null
                         ListRow(
                             id = "/minhas ver ${p.peladaCodigo}",
-                            title = "${pel.esporteLabel} \u2014 ${pel.local.take(20)}",
+                            title = "${pel.esporteLabel} \u2014 ${pel.local}".take(24),
                             description = "${UxCopy.formatDateCompact(pel.dataHora)} \u00B7 Posição #${p.waitlistPosition ?: "?"}"
                         )
                     }

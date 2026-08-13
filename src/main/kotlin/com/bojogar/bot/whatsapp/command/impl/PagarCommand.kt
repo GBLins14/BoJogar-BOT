@@ -84,7 +84,7 @@ class PagarCommand(
                         val icon = if (hasValidPix) "\uD83D\uDFE2" else "\uD83D\uDFE1"
                         ListRow(
                             id = "/pagar ver ${pelada.codigo}",
-                            title = "$icon ${pelada.esporteLabel} — ${pelada.codigo}",
+                            title = "$icon ${pelada.esporteLabel} — ${pelada.codigo}".take(24),
                             description = "R$ ${payment.valor} · ${pelada.local.take(20)}"
                         )
                     }
@@ -200,7 +200,7 @@ class PagarCommand(
             return
         }
 
-        if (payment.pixCode != null) {
+        if (payment.pixCode != null && !isPixExpired(payment.pixGeneratedAt)) {
             showPaymentDetails(context, ws, code)
             return
         }

@@ -182,8 +182,6 @@ class PagamentoService(
         val participantPhone = participant.user.phone
         val participantName = participant.displayName ?: participant.user.name
         val peladaCode = pelada.codigo
-        val peladaEsporteLabel = pelada.esporte.label
-        val chavePix = pelada.chavePix
         val amount = payment.valor
 
         log.info("Payment confirmed via webhook - identifier: {}, endToEnd: {}", syncpayIdentifier, endToEnd)

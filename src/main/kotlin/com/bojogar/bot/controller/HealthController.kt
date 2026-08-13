@@ -24,8 +24,8 @@ class HealthController(
         }
 
         val status = if (dbStatus == "up") "ok" else "degraded"
-        return ResponseEntity.ok(
-            mapOf("status" to status, "database" to dbStatus)
-        )
+        val body = mapOf("status" to status, "database" to dbStatus)
+        return if (dbStatus == "up") ResponseEntity.ok(body)
+        else ResponseEntity.status(503).body(body)
     }
 }

@@ -2,13 +2,15 @@ package com.bojogar.bot.whatsapp.command
 
 import com.bojogar.bot.whatsapp.model.Button
 import com.bojogar.bot.whatsapp.service.WhatsAppService
+import com.bojogar.bot.whatsapp.session.SessionManager
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
 @Component
 class CommandProcessor(
     private val registry: CommandRegistry,
-    private val whatsappService: WhatsAppService
+    private val whatsappService: WhatsAppService,
+    private val sessionManager: SessionManager
 ) {
 
     companion object {
@@ -36,6 +38,7 @@ class CommandProcessor(
             log.info("Comando [{}] executado com sucesso para {}", commandName, context.from)
         } catch (e: Exception) {
             log.error("Erro ao executar comando [{}] para {}: {}", commandName, context.from, e.message, e)
+            sessionManager.clear(context.from)
             whatsappService.sendButtons(
                 to = context.from,
                 body = "\uD83D\uDE13 Ops, algo deu errado. Tente novamente ou volte ao menu.",

@@ -565,8 +565,10 @@ class GerenciarCommand(
             }
             ws.sendMessage(context.from, "\u2705 *$fieldLabel* atualizado com sucesso!\n\n_Avise os jogadores sobre a alteração._")
         } catch (e: IllegalArgumentException) {
+            sessionManager.clear(context.from)
             ws.sendMessage(context.from, "\u26A0\uFE0F ${e.message}")
         } catch (e: Exception) {
+            sessionManager.clear(context.from)
             log.error("Error editing pelada {}: {}", code, e.message, e)
             ws.sendMessage(context.from, "\u274C Ocorreu um erro. Tente novamente mais tarde.")
         }

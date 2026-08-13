@@ -44,8 +44,7 @@ class SessionManager {
     }
 
     fun updateSession(phone: String, key: String, value: String, nextField: String?) {
-        val current = sessions[phone] ?: return
-        sessions[phone] = current.withField(key, value, nextField)
+        sessions.computeIfPresent(phone) { _, current -> current.withField(key, value, nextField) }
     }
 
     fun updateSession(phone: String, session: ConversationSession) {

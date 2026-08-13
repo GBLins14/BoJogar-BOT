@@ -8,6 +8,7 @@ import com.bojogar.bot.entity.PeladaParticipant
 import com.bojogar.bot.enums.*
 import com.bojogar.bot.exception.BusinessException
 import com.bojogar.bot.mapper.PeladaMapper
+import com.bojogar.bot.repository.PagamentoRepository
 import com.bojogar.bot.repository.PeladaParticipantRepository
 import com.bojogar.bot.repository.PeladaRepository
 import com.bojogar.bot.repository.UserRepository
@@ -23,6 +24,7 @@ class PeladaService(
     private val peladaRepository: PeladaRepository,
     private val userRepository: UserRepository,
     private val participantRepository: PeladaParticipantRepository,
+    private val pagamentoRepository: PagamentoRepository,
     private val peladaMapper: PeladaMapper,
     private val authorizationService: AuthorizationService
 ) {
@@ -84,7 +86,7 @@ class PeladaService(
         val normalized = PhoneUtils.normalizePhone(phone)
         val participations = participantRepository.findByUserPhoneAndStatusIn(
             normalized,
-            listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.WAITLIST)
+            listOf(ParticipantStatus.CONFIRMED, ParticipantStatus.PENDING_PAYMENT, ParticipantStatus.WAITLIST)
         )
         return participations.map { peladaMapper.toResponse(it.pelada) }
     }
@@ -136,6 +138,13 @@ class PeladaService(
             participantRepository.findByPeladaIdAndStatus(pelada.id!!, ParticipantStatus.WAITLIST)
 
         participants.forEach { p ->
+            // Cancel pending payments for this participant
+            pagamentoRepository.findByParticipantId(p.id!!).forEach { payment ->
+                if (payment.status == com.bojogar.bot.enums.StatusPagamento.PENDENTE) {
+                    payment.status = com.bojogar.bot.enums.StatusPagamento.ESTORNADO
+                    pagamentoRepository.save(payment)
+                }
+            }
             p.status = ParticipantStatus.CANCELLED
             participantRepository.save(p)
         }

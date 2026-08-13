@@ -6,6 +6,7 @@ import com.bojogar.bot.service.PagamentoService
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import java.security.MessageDigest
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -18,6 +19,7 @@ class AbacatePayWebhookController(
 
     companion object {
         private val log = LoggerFactory.getLogger(AbacatePayWebhookController::class.java)
+        private val mapper = tools.jackson.databind.json.JsonMapper.builder().build()
     }
 
     @PostMapping
@@ -35,7 +37,6 @@ class AbacatePayWebhookController(
         }
 
         try {
-            val mapper = tools.jackson.databind.json.JsonMapper.builder().build()
             val payload = mapper.readValue(body, AbacatePayWebhookPayload::class.java)
 
             val event = payload.event
@@ -105,7 +106,7 @@ class AbacatePayWebhookController(
             val mac = Mac.getInstance("HmacSHA256")
             mac.init(SecretKeySpec(abacatePayProperties.webhookSecret.toByteArray(), "HmacSHA256"))
             val computed = mac.doFinal(payload.toByteArray()).joinToString("") { "%02x".format(it) }
-            computed.equals(receivedSignature, ignoreCase = true)
+            MessageDigest.isEqual(computed.lowercase().toByteArray(), receivedSignature.lowercase().toByteArray())
         } catch (e: Exception) {
             log.error("Error verifying HMAC: {}", e.message)
             false

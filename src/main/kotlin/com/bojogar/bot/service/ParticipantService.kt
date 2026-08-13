@@ -274,9 +274,18 @@ class ParticipantService(
         )
 
         val first = waitlisted.firstOrNull() ?: return null
-        first.status = ParticipantStatus.CONFIRMED
-        first.waitlistPosition = null
-        participantRepository.save(first)
+        val pelada = first.pelada
+
+        if (pelada.valorPorJogador > BigDecimal.ZERO) {
+            first.status = ParticipantStatus.PENDING_PAYMENT
+            first.waitlistPosition = null
+            participantRepository.save(first)
+            createPaymentIfNeeded(first, pelada)
+        } else {
+            first.status = ParticipantStatus.CONFIRMED
+            first.waitlistPosition = null
+            participantRepository.save(first)
+        }
 
         recalculateWaitlistPositions(peladaId)
 
