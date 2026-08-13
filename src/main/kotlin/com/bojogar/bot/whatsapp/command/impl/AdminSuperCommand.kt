@@ -46,7 +46,7 @@ class AdminSuperCommand(
     companion object {
         private val log = LoggerFactory.getLogger(AdminSuperCommand::class.java)
         private val ZONE_BR = ZoneId.of("America/Sao_Paulo")
-        private val GATEWAY_FEE_PER_PIX = BigDecimal("0.85")
+        private val GATEWAY_FEE_PER_PIX = BigDecimal("0.80")
     }
 
     override fun execute(context: CommandContext, whatsappService: WhatsAppService) {
@@ -327,7 +327,7 @@ class AdminSuperCommand(
             .multiply(BigDecimal(taxaPlataformaPercent))
             .divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
 
-        // Custo gateway = R$ 0.85 por PIX confirmado
+        // Custo gateway = R$ 0.80 por PIX confirmado
         val custoGateway = GATEWAY_FEE_PER_PIX.multiply(BigDecimal(qtdPixConfirmados))
 
         // Lucro líquido = receita plataforma - custo gateway
@@ -351,7 +351,7 @@ class AdminSuperCommand(
                 append("*Distribuição:*\n")
                 append("  \uD83D\uDC51 Saldo organizadores: R$ $saldoOrganizadores\n")
                 append("  \uD83D\uDCB0 Receita plataforma ($taxaPlataformaPercent%): R$ $receitaPlataforma\n")
-                append("  \uD83C\uDFE6 Custo gateway (R$ 0,85 × $qtdPixConfirmados): R$ $custoGateway\n\n")
+                append("  \uD83C\uDFE6 Custo gateway (R$ 0,80 × $qtdPixConfirmados): R$ $custoGateway\n\n")
 
                 append("*\uD83D\uDCB2 Lucro líquido: R$ $lucroLiquido*\n")
                 append("_Peladas com pagamento: ${peladasComPagamento.size}_")
