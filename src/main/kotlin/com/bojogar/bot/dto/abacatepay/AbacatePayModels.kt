@@ -9,8 +9,7 @@ data class AbacatePayTransparentData(
     val amount: Int,
     val description: String? = null,
     val expiresIn: Int? = null,
-    val customer: AbacatePayCustomer? = null,
-    val metadata: Map<String, String>? = null
+    val customer: AbacatePayCustomer? = null
 )
 
 data class AbacatePayCustomer(
