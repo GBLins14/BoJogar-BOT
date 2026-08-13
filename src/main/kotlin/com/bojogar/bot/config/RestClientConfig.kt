@@ -24,10 +24,11 @@ class RestClientConfig {
     }
 
     @Bean
-    fun syncPayRestClient(properties: SyncPayProperties): RestClient {
-        log.info("SyncPay REST client configured — baseUrl: {}", properties.baseUrl)
+    fun abacatePayRestClient(properties: AbacatePayProperties): RestClient {
+        log.info("AbacatePay REST client configured")
         return RestClient.builder()
-            .baseUrl(properties.baseUrl)
+            .baseUrl("https://api.abacatepay.com/v2")
+            .defaultHeader("Authorization", "Bearer ${properties.apiKey}")
             .defaultHeader("Content-Type", "application/json")
             .build()
     }

@@ -1,8 +1,8 @@
 package com.bojogar.bot.service
 
-import com.bojogar.bot.config.SyncPayProperties
+import com.bojogar.bot.config.AbacatePayProperties
+import com.bojogar.bot.dto.abacatepay.AbacatePayCustomer
 import com.bojogar.bot.dto.response.PaymentResponse
-import com.bojogar.bot.dto.syncpay.SyncPayClientInfo
 import com.bojogar.bot.enums.ParticipantStatus
 import com.bojogar.bot.enums.StatusPagamento
 import com.bojogar.bot.exception.BusinessException
@@ -34,8 +34,8 @@ class PagamentoService(
     private val paymentMapper: PaymentMapper,
     private val participantMapper: ParticipantMapper,
     private val peladaMapper: com.bojogar.bot.mapper.PeladaMapper,
-    private val syncPayClient: SyncPayClient,
-    private val syncPayProperties: SyncPayProperties,
+    private val abacatePayClient: AbacatePayClient,
+    private val abacatePayProperties: AbacatePayProperties,
     private val notificationService: NotificationService
 ) {
 
@@ -101,30 +101,31 @@ class PagamentoService(
 
         return try {
             val pelada = payment.participant.pelada
-            val clientInfo = SyncPayClientInfo(
+            val customer = AbacatePayCustomer(
                 name = userName,
-                cpf = userCpf,
+                taxId = userCpf,
                 email = userEmail,
-                phone = userPhone.takeLast(11)
+                cellphone = userPhone.takeLast(11)
             )
 
-            val response = syncPayClient.generatePix(
+            val response = abacatePayClient.generatePix(
                 amount = payment.valor,
                 description = "Pelada ${pelada.codigo} - ${pelada.esporte.label}",
-                clientInfo = clientInfo
+                expiresInSeconds = PIX_EXPIRATION.toSeconds().toInt(),
+                customer = customer
             )
 
-            if (response.pixCode != null && response.identifier != null) {
-                payment.pixCode = response.pixCode
-                payment.syncpayIdentifier = response.identifier
+            if (response.brCode != null && response.id != null) {
+                payment.pixCode = response.brCode
+                payment.syncpayIdentifier = response.id
                 payment.pixGeneratedAt = Instant.now()
                 pagamentoRepository.save(payment)
 
-                log.info("PIX generated for participant {} in pelada {} - identifier: {}",
-                    participantId, pelada.codigo, response.identifier)
-                PixGenerationResult.Success(response.pixCode, payment.id!!)
+                log.info("PIX generated for participant {} in pelada {} - id: {}",
+                    participantId, pelada.codigo, response.id)
+                PixGenerationResult.Success(response.brCode, payment.id!!)
             } else {
-                log.error("SyncPay returned empty pixCode or identifier")
+                log.error("AbacatePay returned empty brCode or id")
                 PixGenerationResult.Error("Erro ao gerar PIX. Tente novamente.")
             }
         } catch (e: Exception) {
@@ -250,7 +251,7 @@ class PagamentoService(
         if (totalCollected <= BigDecimal.ZERO) return BigDecimal.ZERO
 
         val platformFee = totalCollected
-            .multiply(BigDecimal(syncPayProperties.platformFeePercent))
+            .multiply(BigDecimal(abacatePayProperties.platformFeePercent))
             .divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
 
         return totalCollected.subtract(platformFee).max(BigDecimal.ZERO)

@@ -1,7 +1,7 @@
 package com.bojogar.bot.whatsapp.command.impl
 
 import com.bojogar.bot.config.AdminProperties
-import com.bojogar.bot.config.SyncPayProperties
+import com.bojogar.bot.config.AbacatePayProperties
 import com.bojogar.bot.enums.ParticipantRole
 import com.bojogar.bot.enums.ParticipantStatus
 import com.bojogar.bot.enums.StatusPagamento
@@ -38,7 +38,7 @@ class AdminSuperCommand(
     private val pagamentoRepository: PagamentoRepository,
     private val peladaService: PeladaService,
     private val pagamentoService: PagamentoService,
-    private val syncPayProperties: SyncPayProperties
+    private val abacatePayProperties: AbacatePayProperties
 ) : BotCommand {
 
     override val name = "/adminsuper"
@@ -263,7 +263,7 @@ class AdminSuperCommand(
             return
         }
 
-        val taxaPercent = syncPayProperties.platformFeePercent
+        val taxaPercent = abacatePayProperties.platformFeePercent
 
         ws.sendMessage(
             context.from,
@@ -322,7 +322,7 @@ class AdminSuperCommand(
         }
 
         // Receita plataforma = taxa cobrada dos organizadores
-        val taxaPlataformaPercent = syncPayProperties.platformFeePercent
+        val taxaPlataformaPercent = abacatePayProperties.platformFeePercent
         val receitaPlataforma = totalArrecadado
             .multiply(BigDecimal(taxaPlataformaPercent))
             .divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
