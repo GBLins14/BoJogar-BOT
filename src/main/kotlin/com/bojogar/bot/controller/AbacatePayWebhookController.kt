@@ -46,11 +46,52 @@ class AbacatePayWebhookController(
                 return ResponseEntity.ok().build()
             }
 
-            if (event == "transparent.completed" && data.id != null) {
-                log.info("Processing completed transparent payment - id: {}", data.id)
-                pagamentoService.processWebhookPayment(data.id, null)
-            } else {
-                log.info("Ignoring webhook - event: {}, id: {}", event, data.id)
+            log.info("Processing webhook event: {} - id: {}", event, data.id)
+
+            when (event) {
+                "transparent.completed" -> {
+                    if (data.id != null) {
+                        pagamentoService.processWebhookPayment(data.id, null)
+                    }
+                }
+                "transparent.refunded" -> {
+                    if (data.id != null) {
+                        pagamentoService.processWebhookRefund(data.id)
+                    }
+                }
+                "transparent.disputed" -> {
+                    log.warn("Transparent payment DISPUTED - id: {}, amount: {}", data.id, data.amount)
+                }
+                "transparent.lost" -> {
+                    log.warn("Transparent payment LOST - id: {}", data.id)
+                }
+                "checkout.completed" -> {
+                    log.info("Checkout completed - id: {}", data.id)
+                }
+                "checkout.refunded" -> {
+                    log.info("Checkout refunded - id: {}", data.id)
+                }
+                "checkout.disputed" -> {
+                    log.warn("Checkout DISPUTED - id: {}, amount: {}", data.id, data.amount)
+                }
+                "checkout.lost" -> {
+                    log.info("Checkout lost - id: {}", data.id)
+                }
+                "payout.completed" -> {
+                    log.info("Payout completed - id: {}", data.id)
+                }
+                "payout.failed" -> {
+                    log.warn("Payout FAILED - id: {}, amount: {}", data.id, data.amount)
+                }
+                "transfer.completed" -> {
+                    log.info("Transfer completed - id: {}", data.id)
+                }
+                "transfer.failed" -> {
+                    log.warn("Transfer FAILED - id: {}, amount: {}", data.id, data.amount)
+                }
+                else -> {
+                    log.info("Unhandled webhook event: {} - id: {}", event, data.id)
+                }
             }
         } catch (e: Exception) {
             log.error("Error processing AbacatePay webhook: {}", e.message, e)

@@ -191,6 +191,54 @@ class PagamentoService(
         log.info("Payment confirmed via webhook for participant {} in pelada {}", participantPhone, peladaCode)
     }
 
+    @Transactional
+    fun processWebhookRefund(syncpayIdentifier: String) {
+        val payment = pagamentoRepository.findBySyncpayIdentifier(syncpayIdentifier)
+        if (payment == null) {
+            log.warn("No matching payment found for refund - identifier: {}", syncpayIdentifier)
+            return
+        }
+
+        if (payment.status == StatusPagamento.ESTORNADO) {
+            log.info("Payment already refunded for identifier: {}", syncpayIdentifier)
+            return
+        }
+
+        payment.status = StatusPagamento.ESTORNADO
+        pagamentoRepository.save(payment)
+
+        val participant = payment.participant
+
+        // Revert participant to PENDING_PAYMENT if they were CONFIRMED
+        if (participant.status == ParticipantStatus.CONFIRMED) {
+            participant.status = ParticipantStatus.PENDING_PAYMENT
+            participantRepository.save(participant)
+            log.info("Participant {} reverted to PENDING_PAYMENT after refund", participant.id)
+
+            val pelada = participant.pelada
+            if (pelada.status == com.bojogar.bot.enums.StatusPelada.FULL) {
+                pelada.status = com.bojogar.bot.enums.StatusPelada.OPEN
+                peladaRepository.save(pelada)
+                log.info("Pelada {} reopened after refund", pelada.codigo)
+            }
+        }
+
+        val participantPhone = participant.user.phone
+        val participantName = participant.displayName ?: participant.user.name
+        val pelada = participant.pelada
+
+        log.info("Payment refunded via webhook - identifier: {}, participant: {}", syncpayIdentifier, participantPhone)
+
+        val peladaResponse = peladaMapper.toResponse(pelada)
+
+        notificationService.notifyPaymentRefunded(
+            participantPhone = participantPhone,
+            participantName = participantName,
+            pelada = peladaResponse,
+            amount = payment.valor
+        )
+    }
+
     @Transactional(readOnly = true)
     fun getPaymentsByPelada(peladaCode: String): List<PaymentResponse> {
         return pagamentoRepository.findByParticipantPeladaCodigo(peladaCode.uppercase())

@@ -118,6 +118,33 @@ class NotificationService(
     }
 
     @Async
+    fun notifyPaymentRefunded(participantPhone: String, participantName: String, pelada: PeladaResponse, amount: BigDecimal) {
+        val message = buildString {
+            append("\u26A0\uFE0F *Pagamento Estornado*\n\n")
+            append("Seu pagamento de *${UxCopy.formatPrice(amount)}* na pelada *${pelada.codigo}* foi estornado.\n\n")
+            append("Sua inscri\u00E7\u00E3o voltou para pendente de pagamento.")
+        }
+
+        notifyUser(participantPhone, message)
+
+        val admins = participantService.getActiveParticipants(pelada.codigo)
+            .filter { it.role in listOf("OWNER", "ADMIN") }
+
+        val adminMessage = buildString {
+            append("\u26A0\uFE0F *Estorno Recebido*\n\n")
+            append("O pagamento de *${UxCopy.formatPrice(amount)}* de *$participantName* na pelada *${pelada.codigo}* foi estornado.")
+        }
+
+        admins.forEach { admin ->
+            try {
+                whatsappService.sendMessage(admin.userPhone, adminMessage)
+            } catch (e: Exception) {
+                log.warn("Failed to notify admin about refund {}: {}", admin.userPhone, e.message)
+            }
+        }
+    }
+
+    @Async
     fun notifyAdminPaymentReceived(peladaCode: String, participantName: String, amount: BigDecimal) {
         val admins = participantService.getActiveParticipants(peladaCode)
             .filter { it.role in listOf("OWNER", "ADMIN") }
