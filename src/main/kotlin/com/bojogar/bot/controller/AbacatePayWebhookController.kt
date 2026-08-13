@@ -1,6 +1,5 @@
 package com.bojogar.bot.controller
 
-import com.bojogar.bot.config.AbacatePayProperties
 import com.bojogar.bot.dto.abacatepay.AbacatePayWebhookPayload
 import com.bojogar.bot.service.PagamentoService
 import org.slf4j.LoggerFactory
@@ -14,13 +13,14 @@ import javax.crypto.spec.SecretKeySpec
 @RestController
 @RequestMapping("/v1/api/abacatepay/webhook")
 class AbacatePayWebhookController(
-    private val pagamentoService: PagamentoService,
-    private val abacatePayProperties: AbacatePayProperties
+    private val pagamentoService: PagamentoService
 ) {
 
     companion object {
         private val log = LoggerFactory.getLogger(AbacatePayWebhookController::class.java)
         private val mapper = tools.jackson.databind.json.JsonMapper.builder().build()
+        private const val ABACATEPAY_PUBLIC_KEY =
+            "t9dXRhHHo3yDEj5pVDYz0frf7q6bMKyMRmxxCPIPp3RCplBfXRxqlC6ZpiWmOqj4L63qEaeUOtrCI8P0VMUgo6iIga2ri9ogaHFs0WIIywSMg0q7RmBfybe1E5XJcfC4IW3alNqym0tXoAKkzvfEjZxV6bE0oG2zJrNNYmUCKZyV0KZ3JS8Votf9EAWWYdiDkMkpbMdPggfh1EqHlVkMiTady6jOR3hyzGEHrIz2Ret0xHKMbiqkr9HS1JhNHDX9"
     }
 
     @PostMapping
@@ -30,11 +30,9 @@ class AbacatePayWebhookController(
     ): ResponseEntity<Void> {
         log.info("AbacatePay webhook received")
 
-        if (abacatePayProperties.webhookSecret.isNotBlank()) {
-            if (signature.isNullOrBlank() || !verifyHmac(body, signature)) {
-                log.warn("Invalid webhook signature from AbacatePay")
-                return ResponseEntity.status(401).build()
-            }
+        if (signature.isNullOrBlank() || !verifyHmac(body, signature)) {
+            log.warn("Invalid webhook signature from AbacatePay")
+            return ResponseEntity.status(401).build()
         }
 
         try {
@@ -105,7 +103,7 @@ class AbacatePayWebhookController(
     private fun verifyHmac(payload: String, receivedSignature: String): Boolean {
         return try {
             val mac = Mac.getInstance("HmacSHA256")
-            mac.init(SecretKeySpec(abacatePayProperties.webhookSecret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+            mac.init(SecretKeySpec(ABACATEPAY_PUBLIC_KEY.toByteArray(Charsets.UTF_8), "HmacSHA256"))
             val computed = Base64.getEncoder().encodeToString(mac.doFinal(payload.toByteArray(Charsets.UTF_8)))
             MessageDigest.isEqual(computed.toByteArray(), receivedSignature.toByteArray())
         } catch (e: Exception) {
