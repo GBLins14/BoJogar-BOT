@@ -21,11 +21,13 @@ import com.bojogar.bot.whatsapp.model.ListSection
 import com.bojogar.bot.whatsapp.service.WhatsAppService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.time.ZoneId
 
 @Component
+@Transactional(readOnly = true)
 class AdminSuperCommand(
     private val adminProperties: AdminProperties,
     private val userRepository: UserRepository,
