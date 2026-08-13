@@ -1,6 +1,7 @@
 package com.bojogar.bot.dto.abacatepay
 
 data class AbacatePayTransparentRequest(
+    val method: String = "PIX",
     val data: AbacatePayTransparentData
 )
 

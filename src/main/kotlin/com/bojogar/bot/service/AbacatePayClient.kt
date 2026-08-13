@@ -27,11 +27,14 @@ class AbacatePayClient(
     ): AbacatePayTransparentResponse {
         val amountCents = amount.multiply(BigDecimal(100)).intValueExact()
 
-        val request = AbacatePayTransparentData(
-            amount = amountCents,
-            description = description,
-            expiresIn = expiresInSeconds,
-            customer = customer
+        val request = AbacatePayTransparentRequest(
+            method = "PIX",
+            data = AbacatePayTransparentData(
+                amount = amountCents,
+                description = description,
+                expiresIn = expiresInSeconds,
+                customer = customer
+            )
         )
 
         log.info("Generating PIX via AbacatePay - amount: {} ({}c), customer: {}", amount, amountCents, customer.taxId)
