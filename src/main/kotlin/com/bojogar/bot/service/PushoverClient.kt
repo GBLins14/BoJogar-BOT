@@ -14,9 +14,30 @@ class PushoverClient(
     companion object {
         private val log = LoggerFactory.getLogger(PushoverClient::class.java)
         private const val API_URL = "https://api.pushover.net/1/messages.json"
+        private val MOTIVATIONAL_MESSAGES = listOf(
+            "Cada venda é prova de que você não desistiu. Segue voando! 🚀",
+            "Anos de luta, e agora o jogo virou. Você merece cada centavo! 💪",
+            "O digital finalmente tá pagando. Isso é só o começo! 🔥",
+            "Mais uma venda, mais uma prova de que persistência vence. 👊",
+            "Enquanto muitos desistiram, você continuou. Tá colhendo agora! 🌱",
+            "Dinheiro entrando enquanto você dorme. Esse é o poder do digital! 💰",
+            "Quem planta todo dia, colhe sem parar. Bora! 🏆",
+            "Essa notificação é o som da liberdade financeira chegando! 🎶",
+            "Mais uma! O sistema tá rodando e você tá crescendo! 📈",
+            "Você construiu isso do zero. Orgulho define. 🏗️",
+            "De tentativa em tentativa até o sucesso. Chegou a hora! ⭐",
+            "A máquina tá ligada e não para mais. Bora escalar! ⚡",
+            "Lembra quando era só sonho? Agora é notificação de venda! 🎯",
+            "Resiliência > talento. Você provou isso. 💎",
+            "Mais uma venda. Mais um passo pro próximo nível. 🪜",
+        )
     }
 
     fun isConfigured(): Boolean = properties.token.isNotBlank() && properties.userKey.isNotBlank()
+
+    fun notifySale() {
+        send("Venda aprovada! 🎉", MOTIVATIONAL_MESSAGES.random())
+    }
 
     fun send(title: String, message: String, priority: Int = 0) {
         if (!isConfigured()) {

@@ -163,9 +163,6 @@ class NotificationService(
             }
         }
 
-        pushoverClient.send(
-            title = "Pagamento Recebido - $peladaCode",
-            message = "$participantName pagou R$ $amount na pelada $peladaCode"
-        )
+        pushoverClient.notifySale()
     }
 }
