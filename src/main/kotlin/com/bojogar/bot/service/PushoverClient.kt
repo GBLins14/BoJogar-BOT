@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.util.LinkedMultiValueMap
 import org.springframework.web.client.RestClient
+import java.math.BigDecimal
 
 @Component
 class PushoverClient(
@@ -35,8 +36,8 @@ class PushoverClient(
 
     fun isConfigured(): Boolean = properties.token.isNotBlank() && properties.userKey.isNotBlank()
 
-    fun notifySale() {
-        send("Venda aprovada! 🎉", MOTIVATIONAL_MESSAGES.random())
+    fun notifySale(amount: BigDecimal) {
+        send("Venda aprovada! 🎉", "R$ $amount\n\n${MOTIVATIONAL_MESSAGES.random()}")
     }
 
     fun send(title: String, message: String, priority: Int = 0) {

@@ -163,6 +163,6 @@ class NotificationService(
             }
         }
 
-        pushoverClient.notifySale()
+        pushoverClient.notifySale(amount)
     }
 }
