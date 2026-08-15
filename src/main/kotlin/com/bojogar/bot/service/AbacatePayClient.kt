@@ -68,6 +68,20 @@ class AbacatePayClient(
         return envelope.data
     }
 
+    fun getStore(): AbacatePayStoreResponse {
+        val envelope = restClient.get()
+            .uri("/store/get")
+            .retrieve()
+            .body(object : ParameterizedTypeReference<AbacatePayEnvelope<AbacatePayStoreResponse>>() {})
+            ?: throw RuntimeException("Empty response from AbacatePay")
+
+        if (envelope.success != true || envelope.data == null) {
+            throw RuntimeException("AbacatePay error: ${envelope.error}")
+        }
+
+        return envelope.data
+    }
+
     fun createPayout(amountCents: Int, externalId: String, description: String?): AbacatePayPayoutResponse {
         log.info("Creating payout via AbacatePay - amount: {}c, externalId: {}", amountCents, externalId)
 

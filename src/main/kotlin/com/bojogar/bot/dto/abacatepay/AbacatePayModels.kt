@@ -53,6 +53,18 @@ data class AbacatePayWebhookItem(
     val endToEndIdentifier: String? = null
 )
 
+data class AbacatePayStoreResponse(
+    val id: String?,
+    val name: String?,
+    val balance: AbacatePayStoreBalance?
+)
+
+data class AbacatePayStoreBalance(
+    val available: Long = 0,
+    val pending: Long = 0,
+    val blocked: Long = 0
+)
+
 data class AbacatePayPayoutRequest(
     val amount: Int,
     val externalId: String,

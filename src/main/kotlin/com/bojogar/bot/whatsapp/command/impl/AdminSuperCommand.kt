@@ -366,7 +366,21 @@ class AdminSuperCommand(
                 append("  \uD83C\uDFE6 Custo gateway (R$ 0,80 × $qtdPixConfirmados): R$ $custoGateway\n")
                 append("  \uD83D\uDCE4 Custo saque (R$ 0,80 × $qtdSaques): R$ $custoSaque\n\n")
 
-                append("*\uD83D\uDCB2 Lucro líquido: R$ $lucroLiquido*\n")
+                append("*\uD83D\uDCB2 Lucro líquido: R$ $lucroLiquido*\n\n")
+
+                val storeBalance = try {
+                    abacatePayClient.getStore().balance
+                } catch (e: Exception) {
+                    null
+                }
+                if (storeBalance != null) {
+                    val avail = BigDecimal(storeBalance.available).divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
+                    val pend = BigDecimal(storeBalance.pending).divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
+                    append("*Saldo AbacatePay:*\n")
+                    append("  \uD83D\uDCB0 Disponível: R$ $avail\n")
+                    append("  \u23F3 Pendente: R$ $pend\n\n")
+                }
+
                 append("_Peladas com pagamento: ${peladasComPagamento.size}_")
             }
         )
@@ -381,26 +395,35 @@ class AdminSuperCommand(
     private fun showSaque(context: CommandContext, ws: WhatsAppService) {
         log.info("Admin super payout screen accessed by {}", context.from)
 
-        val allPayments = pagamentoRepository.findAll()
-        val confirmed = allPayments.filter { it.status == StatusPagamento.CONFIRMADO }
-        val totalArrecadado = confirmed.sumOf { it.valor }
+        val store = try {
+            abacatePayClient.getStore()
+        } catch (e: Exception) {
+            log.error("Failed to fetch store balance: {}", e.message)
+            ws.sendMessage(context.from, "\u274C Erro ao consultar saldo na AbacatePay.")
+            return
+        }
 
-        val taxaPlataformaPercent = abacatePayProperties.platformFeePercent
-        val receitaPlataforma = totalArrecadado
-            .multiply(BigDecimal(taxaPlataformaPercent))
-            .divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
+        val balance = store.balance
+        val availableCents = balance?.available ?: 0
+        val pendingCents = balance?.pending ?: 0
+        val blockedCents = balance?.blocked ?: 0
 
-        val custoGateway = GATEWAY_FEE_PER_PIX.multiply(BigDecimal(confirmed.size))
-        val lucroLiquido = receitaPlataforma.subtract(custoGateway).max(BigDecimal.ZERO)
+        val available = BigDecimal(availableCents).divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
+        val pending = BigDecimal(pendingCents).divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
+        val blocked = BigDecimal(blockedCents).divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
 
-        // Saldo sacável = lucro líquido - taxa do saque
-        val saldoAposTaxa = lucroLiquido.subtract(WITHDRAWAL_FEE_PER_SAQUE).max(BigDecimal.ZERO)
+        // Valor sacável = disponível - taxa do saque
+        val saldoAposTaxa = available.subtract(WITHDRAWAL_FEE_PER_SAQUE).max(BigDecimal.ZERO)
 
         ws.sendMessage(
             context.from,
             buildString {
-                append("\uD83D\uDD12 *Saque — Plataforma*\n\n")
-                append("\uD83D\uDCB0 Lucro líquido: *R$ $lucroLiquido*\n")
+                append("\uD83D\uDD12 *Saque — ${store.name ?: "Plataforma"}*\n\n")
+                append("\uD83D\uDCB0 Disponível: *R$ $available*\n")
+                append("\u23F3 Pendente: *R$ $pending*\n")
+                if (blockedCents > 0) {
+                    append("\uD83D\uDD12 Bloqueado: *R$ $blocked*\n")
+                }
                 append("\uD83C\uDFE6 Taxa do saque: *R$ 0,80*\n")
                 append("\uD83D\uDCB5 Valor do saque: *R$ $saldoAposTaxa*\n\n")
                 if (saldoAposTaxa < PAYOUT_MIN_AMOUNT) {
@@ -450,20 +473,21 @@ class AdminSuperCommand(
             return
         }
 
-        // Revalidar saldo antes de sacar
-        val allPayments = pagamentoRepository.findAll()
-        val confirmed = allPayments.filter { it.status == StatusPagamento.CONFIRMADO }
-        val totalArrecadado = confirmed.sumOf { it.valor }
-        val taxaPlataformaPercent = abacatePayProperties.platformFeePercent
-        val receitaPlataforma = totalArrecadado
-            .multiply(BigDecimal(taxaPlataformaPercent))
-            .divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
-        val custoGateway = GATEWAY_FEE_PER_PIX.multiply(BigDecimal(confirmed.size))
-        val lucroLiquido = receitaPlataforma.subtract(custoGateway).max(BigDecimal.ZERO)
-        val saldoAposTaxa = lucroLiquido.subtract(WITHDRAWAL_FEE_PER_SAQUE).max(BigDecimal.ZERO)
+        // Revalidar saldo real via API antes de sacar
+        val store = try {
+            abacatePayClient.getStore()
+        } catch (e: Exception) {
+            log.error("Failed to fetch store balance before payout: {}", e.message)
+            ws.sendMessage(context.from, "\u274C Erro ao verificar saldo. Tente novamente.")
+            return
+        }
+
+        val availableCents = store.balance?.available ?: 0
+        val available = BigDecimal(availableCents).divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
+        val saldoAposTaxa = available.subtract(WITHDRAWAL_FEE_PER_SAQUE).max(BigDecimal.ZERO)
 
         if (valor > saldoAposTaxa) {
-            ws.sendMessage(context.from, "\u26A0\uFE0F Saldo insuficiente. Disponível: *R$ $saldoAposTaxa*.")
+            ws.sendMessage(context.from, "\u26A0\uFE0F Saldo insuficiente. Disponível para saque: *R$ $saldoAposTaxa*.")
             return
         }
 
