@@ -208,9 +208,11 @@ class CriarCommand(
     }
 
     private fun askPrice(context: CommandContext, ws: WhatsAppService) {
+        val minPrice = platformConfigService.getMinPrice()
+        val maxPrice = platformConfigService.getMaxPrice()
         ws.sendButtons(
             to = context.from,
-            body = "*(6/6)* Vai cobrar dos jogadores?\n\nDigite o valor ou *0* para gratuita.\n_Mín. R\$ 10 · Máx. R\$ 100_",
+            body = "*(6/6)* Vai cobrar dos jogadores?\n\nDigite o valor ou *0* para gratuita.\n_Mín. R\$ ${minPrice} · Máx. R\$ ${maxPrice}_",
             buttons = listOf(
                 Button(id = "/criar input_price 0", title = "Gratuita"),
                 Button(id = "/criar cancelar", title = "\u274C Cancelar")
