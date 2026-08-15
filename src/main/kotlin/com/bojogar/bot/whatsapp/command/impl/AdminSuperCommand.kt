@@ -10,6 +10,7 @@ import com.bojogar.bot.repository.PagamentoRepository
 import com.bojogar.bot.repository.PeladaParticipantRepository
 import com.bojogar.bot.repository.PeladaRepository
 import com.bojogar.bot.repository.UserRepository
+import com.bojogar.bot.service.AbacatePayClient
 import com.bojogar.bot.service.PagamentoService
 import com.bojogar.bot.service.PeladaService
 import com.bojogar.bot.util.PhoneUtils
@@ -27,6 +28,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.util.UUID
 
 @Component
 @Transactional(readOnly = true)
@@ -38,6 +40,7 @@ class AdminSuperCommand(
     private val pagamentoRepository: PagamentoRepository,
     private val peladaService: PeladaService,
     private val pagamentoService: PagamentoService,
+    private val abacatePayClient: AbacatePayClient,
     private val abacatePayProperties: AbacatePayProperties
 ) : BotCommand {
 
@@ -48,6 +51,7 @@ class AdminSuperCommand(
         private val ZONE_BR = ZoneId.of("America/Sao_Paulo")
         private val GATEWAY_FEE_PER_PIX = BigDecimal("0.80")
         private val WITHDRAWAL_FEE_PER_SAQUE = BigDecimal("0.80")
+        private val PAYOUT_MIN_AMOUNT = BigDecimal("3.50")
     }
 
     override fun execute(context: CommandContext, whatsappService: WhatsAppService) {
@@ -65,6 +69,8 @@ class AdminSuperCommand(
             "organizadores" -> showOrganizadores(context, whatsappService)
             "financeiro" -> showFinanceiro(context, whatsappService)
             "usuarios" -> showUsuarios(context, whatsappService)
+            "saque" -> showSaque(context, whatsappService)
+            "sacar" -> executarSaque(context, whatsappService)
             else -> showDashboard(context, whatsappService)
         }
     }
@@ -124,7 +130,8 @@ class AdminSuperCommand(
                         ListRow(id = "/adminsuper peladas", title = "\u26BD Peladas Ativas", description = "$activePeladas ativas"),
                         ListRow(id = "/adminsuper organizadores", title = "\uD83D\uDC51 Organizadores", description = "Perfis e saldos"),
                         ListRow(id = "/adminsuper financeiro", title = "\uD83D\uDCB0 Financeiro Geral", description = "R$ $totalRevenue arrecadados"),
-                        ListRow(id = "/adminsuper usuarios", title = "\uD83D\uDC64 Usuários", description = "$totalUsers cadastrados")
+                        ListRow(id = "/adminsuper usuarios", title = "\uD83D\uDC64 Usuários", description = "$totalUsers cadastrados"),
+                        ListRow(id = "/adminsuper saque", title = "\uD83D\uDCE4 Saque", description = "Sacar saldo da plataforma")
                     )
                 )
             )
@@ -363,6 +370,142 @@ class AdminSuperCommand(
                 append("_Peladas com pagamento: ${peladasComPagamento.size}_")
             }
         )
+
+        ws.sendButtons(
+            to = context.from,
+            body = "Ações:",
+            buttons = listOf(Button(id = "/adminsuper", title = "Dashboard"))
+        )
+    }
+
+    private fun showSaque(context: CommandContext, ws: WhatsAppService) {
+        log.info("Admin super payout screen accessed by {}", context.from)
+
+        val allPayments = pagamentoRepository.findAll()
+        val confirmed = allPayments.filter { it.status == StatusPagamento.CONFIRMADO }
+        val totalArrecadado = confirmed.sumOf { it.valor }
+
+        val taxaPlataformaPercent = abacatePayProperties.platformFeePercent
+        val receitaPlataforma = totalArrecadado
+            .multiply(BigDecimal(taxaPlataformaPercent))
+            .divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
+
+        val custoGateway = GATEWAY_FEE_PER_PIX.multiply(BigDecimal(confirmed.size))
+        val lucroLiquido = receitaPlataforma.subtract(custoGateway).max(BigDecimal.ZERO)
+
+        // Saldo sacável = lucro líquido - taxa do saque
+        val saldoAposTaxa = lucroLiquido.subtract(WITHDRAWAL_FEE_PER_SAQUE).max(BigDecimal.ZERO)
+
+        ws.sendMessage(
+            context.from,
+            buildString {
+                append("\uD83D\uDD12 *Saque — Plataforma*\n\n")
+                append("\uD83D\uDCB0 Lucro líquido: *R$ $lucroLiquido*\n")
+                append("\uD83C\uDFE6 Taxa do saque: *R$ 0,80*\n")
+                append("\uD83D\uDCB5 Valor do saque: *R$ $saldoAposTaxa*\n\n")
+                if (saldoAposTaxa < PAYOUT_MIN_AMOUNT) {
+                    append("\u26A0\uFE0F Saldo insuficiente.\nMínimo para saque: *R$ 3,50*.")
+                } else {
+                    append("Mínimo: R$ 3,50 · Taxa: R$ 0,80/saque\n")
+                    append("_O saque é processado instantaneamente via PIX._")
+                }
+            }
+        )
+
+        if (saldoAposTaxa >= PAYOUT_MIN_AMOUNT) {
+            ws.sendButtons(
+                to = context.from,
+                body = "Confirma o saque de R$ $saldoAposTaxa?",
+                buttons = listOf(
+                    Button(id = "/adminsuper sacar $saldoAposTaxa", title = "Sacar R$ $saldoAposTaxa"),
+                    Button(id = "/adminsuper", title = "Cancelar")
+                )
+            )
+        } else {
+            ws.sendButtons(
+                to = context.from,
+                body = "Ações:",
+                buttons = listOf(Button(id = "/adminsuper", title = "Dashboard"))
+            )
+        }
+    }
+
+    private fun executarSaque(context: CommandContext, ws: WhatsAppService) {
+        val valorStr = context.args.getOrNull(1)
+        if (valorStr == null) {
+            ws.sendMessage(context.from, "\u26A0\uFE0F Valor do saque não informado.")
+            return
+        }
+
+        val valor: BigDecimal
+        try {
+            valor = BigDecimal(valorStr)
+        } catch (e: NumberFormatException) {
+            ws.sendMessage(context.from, "\u26A0\uFE0F Valor inválido.")
+            return
+        }
+
+        if (valor < PAYOUT_MIN_AMOUNT) {
+            ws.sendMessage(context.from, "\u26A0\uFE0F Valor mínimo para saque: *R$ 3,50*.")
+            return
+        }
+
+        // Revalidar saldo antes de sacar
+        val allPayments = pagamentoRepository.findAll()
+        val confirmed = allPayments.filter { it.status == StatusPagamento.CONFIRMADO }
+        val totalArrecadado = confirmed.sumOf { it.valor }
+        val taxaPlataformaPercent = abacatePayProperties.platformFeePercent
+        val receitaPlataforma = totalArrecadado
+            .multiply(BigDecimal(taxaPlataformaPercent))
+            .divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
+        val custoGateway = GATEWAY_FEE_PER_PIX.multiply(BigDecimal(confirmed.size))
+        val lucroLiquido = receitaPlataforma.subtract(custoGateway).max(BigDecimal.ZERO)
+        val saldoAposTaxa = lucroLiquido.subtract(WITHDRAWAL_FEE_PER_SAQUE).max(BigDecimal.ZERO)
+
+        if (valor > saldoAposTaxa) {
+            ws.sendMessage(context.from, "\u26A0\uFE0F Saldo insuficiente. Disponível: *R$ $saldoAposTaxa*.")
+            return
+        }
+
+        val externalId = "saque-${UUID.randomUUID()}"
+        val amountCents = valor.multiply(BigDecimal(100)).intValueExact()
+
+        log.info("PAYOUT INITIATED by {} - amount: R$ {}, externalId: {}", context.from, valor, externalId)
+
+        ws.sendMessage(context.from, "\u23F3 Processando saque de *R$ $valor*...")
+
+        try {
+            val response = abacatePayClient.createPayout(
+                amountCents = amountCents,
+                externalId = externalId,
+                description = "Saque plataforma BoJogar"
+            )
+
+            log.info("PAYOUT CREATED - id: {}, status: {}, externalId: {}, amount: R$ {}",
+                response.id, response.status, externalId, valor)
+
+            ws.sendMessage(
+                context.from,
+                buildString {
+                    append("\u2705 *Saque Solicitado!*\n\n")
+                    append("\uD83D\uDCB5 Valor: *R$ $valor*\n")
+                    append("\uD83C\uDFE6 Taxa: *R$ 0,80*\n")
+                    append("\uD83D\uDCCB Status: *${response.status}*\n")
+                    append("\uD83D\uDD11 ID: ${response.id}\n\n")
+                    append("_O valor será creditado na sua chave PIX instantaneamente._")
+                }
+            )
+        } catch (e: org.springframework.web.client.HttpClientErrorException.TooManyRequests) {
+            log.warn("PAYOUT RATE LIMITED - externalId: {}", externalId)
+            ws.sendMessage(context.from, "\u26A0\uFE0F Limite de 1 saque por minuto. Aguarde e tente novamente.")
+        } catch (e: org.springframework.web.client.HttpClientErrorException) {
+            log.error("PAYOUT FAILED - externalId: {}, status: {}, body: {}",
+                externalId, e.statusCode, e.responseBodyAsString, e)
+            ws.sendMessage(context.from, "\u274C Erro ao processar saque. Tente novamente.")
+        } catch (e: Exception) {
+            log.error("PAYOUT ERROR - externalId: {}, error: {}", externalId, e.message, e)
+            ws.sendMessage(context.from, "\u274C Erro inesperado ao processar saque. Tente novamente.")
+        }
 
         ws.sendButtons(
             to = context.from,
