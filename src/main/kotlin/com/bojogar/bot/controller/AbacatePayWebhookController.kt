@@ -46,51 +46,33 @@ class AbacatePayWebhookController(
                 return ResponseEntity.ok().build()
             }
 
-            log.info("Processing webhook event: {} - id: {}", event, data.id)
+            val transparent = data.transparent
 
             when (event) {
                 "transparent.completed" -> {
-                    if (data.id != null) {
-                        pagamentoService.processWebhookPayment(data.id, null)
+                    if (transparent?.id != null) {
+                        log.info("Processing transparent.completed - id: {}", transparent.id)
+                        pagamentoService.processWebhookPayment(transparent.id, transparent.endToEndIdentifier)
+                    } else {
+                        log.warn("transparent.completed received but no transparent data found")
                     }
                 }
                 "transparent.refunded" -> {
-                    if (data.id != null) {
-                        pagamentoService.processWebhookRefund(data.id)
+                    if (transparent?.id != null) {
+                        log.info("Processing transparent.refunded - id: {}", transparent.id)
+                        pagamentoService.processWebhookRefund(transparent.id)
+                    } else {
+                        log.warn("transparent.refunded received but no transparent data found")
                     }
                 }
                 "transparent.disputed" -> {
-                    log.warn("Transparent payment DISPUTED - id: {}, amount: {}", data.id, data.amount)
+                    log.warn("Transparent payment DISPUTED - id: {}, amount: {}", transparent?.id, transparent?.amount)
                 }
                 "transparent.lost" -> {
-                    log.warn("Transparent payment LOST - id: {}", data.id)
-                }
-                "checkout.completed" -> {
-                    log.info("Checkout completed - id: {}", data.id)
-                }
-                "checkout.refunded" -> {
-                    log.info("Checkout refunded - id: {}", data.id)
-                }
-                "checkout.disputed" -> {
-                    log.warn("Checkout DISPUTED - id: {}, amount: {}", data.id, data.amount)
-                }
-                "checkout.lost" -> {
-                    log.info("Checkout lost - id: {}", data.id)
-                }
-                "payout.completed" -> {
-                    log.info("Payout completed - id: {}", data.id)
-                }
-                "payout.failed" -> {
-                    log.warn("Payout FAILED - id: {}, amount: {}", data.id, data.amount)
-                }
-                "transfer.completed" -> {
-                    log.info("Transfer completed - id: {}", data.id)
-                }
-                "transfer.failed" -> {
-                    log.warn("Transfer FAILED - id: {}, amount: {}", data.id, data.amount)
+                    log.warn("Transparent payment LOST - id: {}", transparent?.id)
                 }
                 else -> {
-                    log.info("Unhandled webhook event: {} - id: {}", event, data.id)
+                    log.info("Webhook event received: {}", event)
                 }
             }
         } catch (e: Exception) {

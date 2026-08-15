@@ -40,9 +40,15 @@ data class AbacatePayWebhookPayload(
 )
 
 data class AbacatePayWebhookData(
+    val transparent: AbacatePayWebhookItem? = null,
+    val checkout: AbacatePayWebhookItem? = null,
+    val payout: AbacatePayWebhookItem? = null,
+    val transfer: AbacatePayWebhookItem? = null
+)
+
+data class AbacatePayWebhookItem(
     val id: String?,
     val amount: Int?,
     val status: String?,
-    val brCode: String?,
-    val metadata: Map<String, Any>? = null
+    val endToEndIdentifier: String? = null
 )
