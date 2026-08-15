@@ -28,7 +28,7 @@ class AbacatePayWebhookController(
         @RequestHeader("X-Webhook-Signature", required = false) signature: String?,
         @RequestBody body: String
     ): ResponseEntity<Void> {
-        log.info("AbacatePay webhook received")
+        log.info("AbacatePay webhook received - body: {}", body)
 
         if (signature.isNullOrBlank() || !verifyHmac(body, signature)) {
             log.warn("Invalid webhook signature from AbacatePay")
