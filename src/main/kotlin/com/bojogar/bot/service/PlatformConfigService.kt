@@ -4,6 +4,7 @@ import com.bojogar.bot.entity.PlatformConfig
 import com.bojogar.bot.repository.PlatformConfigRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.util.concurrent.atomic.AtomicReference
@@ -20,7 +21,7 @@ class PlatformConfigService(
 
     private val cache = AtomicReference<PlatformConfig?>(null)
 
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun getConfig(): PlatformConfig {
         cache.get()?.let { return it }
         val config = repository.findById(KEY).orElseGet {
@@ -35,7 +36,7 @@ class PlatformConfigService(
     fun getMaxPrice(): BigDecimal = getConfig().maxPrice
     fun getPlatformFeePercent(): Int = getConfig().platformFeePercent
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun updateMinPrice(value: BigDecimal): PlatformConfig {
         val config = repository.findById(KEY).orElseGet { repository.save(PlatformConfig()) }
         config.minPrice = value
@@ -45,7 +46,7 @@ class PlatformConfigService(
         return saved
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun updateMaxPrice(value: BigDecimal): PlatformConfig {
         val config = repository.findById(KEY).orElseGet { repository.save(PlatformConfig()) }
         config.maxPrice = value
@@ -55,7 +56,7 @@ class PlatformConfigService(
         return saved
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun updatePlatformFeePercent(value: Int): PlatformConfig {
         val config = repository.findById(KEY).orElseGet { repository.save(PlatformConfig()) }
         config.platformFeePercent = value
