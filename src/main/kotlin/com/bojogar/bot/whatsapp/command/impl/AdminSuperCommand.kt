@@ -13,6 +13,7 @@ import com.bojogar.bot.repository.UserRepository
 import com.bojogar.bot.service.AbacatePayClient
 import com.bojogar.bot.service.PagamentoService
 import com.bojogar.bot.service.PeladaService
+import com.bojogar.bot.service.PlatformConfigService
 import com.bojogar.bot.util.PhoneUtils
 import com.bojogar.bot.whatsapp.UxCopy
 import com.bojogar.bot.whatsapp.command.BotCommand
@@ -21,6 +22,7 @@ import com.bojogar.bot.whatsapp.model.Button
 import com.bojogar.bot.whatsapp.model.ListRow
 import com.bojogar.bot.whatsapp.model.ListSection
 import com.bojogar.bot.whatsapp.service.WhatsAppService
+import com.bojogar.bot.whatsapp.session.SessionManager
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -41,6 +43,8 @@ class AdminSuperCommand(
     private val peladaService: PeladaService,
     private val pagamentoService: PagamentoService,
     private val abacatePayClient: AbacatePayClient,
+    private val platformConfigService: PlatformConfigService,
+    private val sessionManager: SessionManager,
     private val abacatePayProperties: AbacatePayProperties
 ) : BotCommand {
 
@@ -71,6 +75,10 @@ class AdminSuperCommand(
             "usuarios" -> showUsuarios(context, whatsappService)
             "saque" -> showSaque(context, whatsappService)
             "sacar" -> executarSaque(context, whatsappService)
+            "config" -> showConfig(context, whatsappService)
+            "setmin" -> setConfigValue(context, whatsappService, "min")
+            "setmax" -> setConfigValue(context, whatsappService, "max")
+            "settaxa" -> setConfigValue(context, whatsappService, "taxa")
             else -> showDashboard(context, whatsappService)
         }
     }
@@ -131,7 +139,8 @@ class AdminSuperCommand(
                         ListRow(id = "/adminsuper organizadores", title = "\uD83D\uDC51 Organizadores", description = "Perfis e saldos"),
                         ListRow(id = "/adminsuper financeiro", title = "\uD83D\uDCB0 Financeiro Geral", description = "R$ $totalRevenue arrecadados"),
                         ListRow(id = "/adminsuper usuarios", title = "\uD83D\uDC64 Usuários", description = "$totalUsers cadastrados"),
-                        ListRow(id = "/adminsuper saque", title = "\uD83D\uDCE4 Saque", description = "Sacar saldo da plataforma")
+                        ListRow(id = "/adminsuper saque", title = "\uD83D\uDCE4 Saque", description = "Sacar saldo da plataforma"),
+                        ListRow(id = "/adminsuper config", title = "\u2699\uFE0F Configurações", description = "Valores e taxas")
                     )
                 )
             )
@@ -271,7 +280,7 @@ class AdminSuperCommand(
             return
         }
 
-        val taxaPercent = abacatePayProperties.platformFeePercent
+        val taxaPercent = platformConfigService.getPlatformFeePercent()
 
         ws.sendMessage(
             context.from,
@@ -330,7 +339,7 @@ class AdminSuperCommand(
         }
 
         // Receita plataforma = taxa cobrada dos organizadores
-        val taxaPlataformaPercent = abacatePayProperties.platformFeePercent
+        val taxaPlataformaPercent = platformConfigService.getPlatformFeePercent()
         val receitaPlataforma = totalArrecadado
             .multiply(BigDecimal(taxaPlataformaPercent))
             .divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
@@ -417,7 +426,7 @@ class AdminSuperCommand(
             val confirmed = allPayments.filter { it.status == StatusPagamento.CONFIRMADO }
             val totalArrecadado = confirmed.sumOf { it.valor }
             val receitaPlataforma = totalArrecadado
-                .multiply(BigDecimal(abacatePayProperties.platformFeePercent))
+                .multiply(BigDecimal(platformConfigService.getPlatformFeePercent()))
                 .divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
             val custoGateway = GATEWAY_FEE_PER_PIX.multiply(BigDecimal(confirmed.size))
             available = receitaPlataforma.subtract(custoGateway).max(BigDecimal.ZERO)
@@ -494,7 +503,7 @@ class AdminSuperCommand(
             val confirmed = allPayments.filter { it.status == StatusPagamento.CONFIRMADO }
             val totalArrecadado = confirmed.sumOf { it.valor }
             val receitaPlataforma = totalArrecadado
-                .multiply(BigDecimal(abacatePayProperties.platformFeePercent))
+                .multiply(BigDecimal(platformConfigService.getPlatformFeePercent()))
                 .divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
             val custoGateway = GATEWAY_FEE_PER_PIX.multiply(BigDecimal(confirmed.size))
             receitaPlataforma.subtract(custoGateway).max(BigDecimal.ZERO)
@@ -551,6 +560,98 @@ class AdminSuperCommand(
             to = context.from,
             body = "Ações:",
             buttons = listOf(Button(id = "/adminsuper", title = "Dashboard"))
+        )
+    }
+
+    private fun showConfig(context: CommandContext, ws: WhatsAppService) {
+        log.info("Admin super config accessed by {}", context.from)
+        val config = platformConfigService.getConfig()
+
+        ws.sendMessage(
+            context.from,
+            buildString {
+                append("\u2699\uFE0F *Configurações da Plataforma*\n\n")
+                append("\uD83D\uDCB5 *Valor mínimo:* R$ ${config.minPrice}\n")
+                append("\uD83D\uDCB5 *Valor máximo:* R$ ${config.maxPrice}\n")
+                append("\uD83D\uDCB0 *Taxa plataforma:* ${config.platformFeePercent}%\n")
+            }
+        )
+
+        ws.sendList(
+            to = context.from,
+            body = "Selecione para alterar:",
+            buttonLabel = "Alterar",
+            sections = listOf(
+                ListSection(
+                    title = "Configurações",
+                    rows = listOf(
+                        ListRow(id = "/adminsuper setmin", title = "\uD83D\uDCB5 Valor Mínimo", description = "Atual: R$ ${config.minPrice}"),
+                        ListRow(id = "/adminsuper setmax", title = "\uD83D\uDCB5 Valor Máximo", description = "Atual: R$ ${config.maxPrice}"),
+                        ListRow(id = "/adminsuper settaxa", title = "\uD83D\uDCB0 Taxa Plataforma", description = "Atual: ${config.platformFeePercent}%")
+                    )
+                )
+            )
+        )
+    }
+
+    private fun setConfigValue(context: CommandContext, ws: WhatsAppService, field: String) {
+        val valueStr = context.args.getOrNull(1)
+
+        if (valueStr == null) {
+            val label = when (field) {
+                "min" -> "valor mínimo (ex: 10)"
+                "max" -> "valor máximo (ex: 200)"
+                "taxa" -> "taxa em % (ex: 15)"
+                else -> return
+            }
+            sessionManager.setCurrentPelada(context.from, field, com.bojogar.bot.whatsapp.session.ConversationState.ADMIN_CONFIG)
+            ws.sendButtons(
+                to = context.from,
+                body = "\u2699\uFE0F Digite o novo $label:",
+                buttons = listOf(Button(id = "/adminsuper config", title = "\u274C Cancelar"))
+            )
+            return
+        }
+
+        try {
+            when (field) {
+                "min" -> {
+                    val valor = valueStr.replace(",", ".").toBigDecimalOrNull()
+                        ?: throw IllegalArgumentException("Valor inválido")
+                    if (valor < BigDecimal.ONE) throw IllegalArgumentException("Mínimo deve ser >= R$ 1")
+                    if (valor >= platformConfigService.getMaxPrice()) throw IllegalArgumentException("Mínimo deve ser menor que o máximo (R$ ${platformConfigService.getMaxPrice()})")
+                    platformConfigService.updateMinPrice(valor)
+                    log.info("CONFIG UPDATED by {} - minPrice: {}", context.from, valor)
+                    ws.sendMessage(context.from, "\u2705 Valor mínimo atualizado para *R$ $valor*.")
+                }
+                "max" -> {
+                    val valor = valueStr.replace(",", ".").toBigDecimalOrNull()
+                        ?: throw IllegalArgumentException("Valor inválido")
+                    if (valor <= platformConfigService.getMinPrice()) throw IllegalArgumentException("Máximo deve ser maior que o mínimo (R$ ${platformConfigService.getMinPrice()})")
+                    platformConfigService.updateMaxPrice(valor)
+                    log.info("CONFIG UPDATED by {} - maxPrice: {}", context.from, valor)
+                    ws.sendMessage(context.from, "\u2705 Valor máximo atualizado para *R$ $valor*.")
+                }
+                "taxa" -> {
+                    val taxa = valueStr.toIntOrNull()
+                        ?: throw IllegalArgumentException("Valor inválido. Digite um número inteiro.")
+                    if (taxa < 0 || taxa > 50) throw IllegalArgumentException("Taxa deve ser entre 0% e 50%")
+                    platformConfigService.updatePlatformFeePercent(taxa)
+                    log.info("CONFIG UPDATED by {} - platformFeePercent: {}%", context.from, taxa)
+                    ws.sendMessage(context.from, "\u2705 Taxa da plataforma atualizada para *$taxa%*.")
+                }
+            }
+        } catch (e: IllegalArgumentException) {
+            ws.sendMessage(context.from, "\u26A0\uFE0F ${e.message}")
+        }
+
+        ws.sendButtons(
+            to = context.from,
+            body = "Ações:",
+            buttons = listOf(
+                Button(id = "/adminsuper config", title = "Configurações"),
+                Button(id = "/adminsuper", title = "Dashboard")
+            )
         )
     }
 

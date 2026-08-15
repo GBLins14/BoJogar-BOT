@@ -27,6 +27,7 @@ class GerenciarCommand(
     private val peladaService: PeladaService,
     private val participantService: ParticipantService,
     private val pagamentoService: PagamentoService,
+    private val platformConfigService: PlatformConfigService,
     private val sessionManager: SessionManager,
     private val whatsAppProperties: WhatsAppProperties
 ) : BotCommand {
@@ -37,8 +38,8 @@ class GerenciarCommand(
     companion object {
         private val log = LoggerFactory.getLogger(GerenciarCommand::class.java)
         private val ZONE_BR = ZoneId.of("America/Sao_Paulo")
-        private val MIN_PRICE = BigDecimal(10)
-        private val MAX_PRICE = BigDecimal(100)
+        private val DEFAULT_MIN_PRICE = BigDecimal(10)
+        private val DEFAULT_MAX_PRICE = BigDecimal(100)
     }
 
     override fun execute(context: CommandContext, whatsappService: WhatsAppService) {
@@ -529,11 +530,13 @@ class GerenciarCommand(
                 "valor" -> {
                     val valor = value.replace(",", ".").toBigDecimalOrNull()
                         ?: throw IllegalArgumentException("Valor inválido")
-                    if (valor > BigDecimal.ZERO && valor < MIN_PRICE) {
-                        throw IllegalArgumentException("O valor mínimo para pelada paga é R$ $MIN_PRICE")
+                    val minPrice = platformConfigService.getMinPrice()
+                    val maxPrice = platformConfigService.getMaxPrice()
+                    if (valor > BigDecimal.ZERO && valor < minPrice) {
+                        throw IllegalArgumentException("O valor mínimo para pelada paga é R$ $minPrice")
                     }
-                    if (valor > MAX_PRICE) {
-                        throw IllegalArgumentException("O valor máximo por jogador é R$ $MAX_PRICE")
+                    if (valor > maxPrice) {
+                        throw IllegalArgumentException("O valor máximo por jogador é R$ $maxPrice")
                     }
                     UpdatePeladaRequest(valorPorJogador = valor)
                 }

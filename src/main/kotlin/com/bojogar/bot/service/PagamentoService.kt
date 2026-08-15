@@ -36,6 +36,7 @@ class PagamentoService(
     private val peladaMapper: com.bojogar.bot.mapper.PeladaMapper,
     private val abacatePayClient: AbacatePayClient,
     private val abacatePayProperties: AbacatePayProperties,
+    private val platformConfigService: PlatformConfigService,
     private val notificationService: NotificationService
 ) {
 
@@ -311,7 +312,7 @@ class PagamentoService(
         if (totalCollected <= BigDecimal.ZERO) return BigDecimal.ZERO
 
         val platformFee = totalCollected
-            .multiply(BigDecimal(abacatePayProperties.platformFeePercent))
+            .multiply(BigDecimal(platformConfigService.getPlatformFeePercent()))
             .divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
 
         return totalCollected.subtract(platformFee).max(BigDecimal.ZERO)

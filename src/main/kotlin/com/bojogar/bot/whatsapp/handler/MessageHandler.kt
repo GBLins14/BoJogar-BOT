@@ -183,6 +183,11 @@ class MessageHandler(
                     val code = session.currentPeladaCode ?: ""
                     commandProcessor.process(context.copy(rawMessage = "/pagar cpf_input $code $rawMessage"))
                 }
+                ConversationState.ADMIN_CONFIG -> {
+                    val field = session.currentPeladaCode ?: ""
+                    sessionManager.clear(context.from)
+                    commandProcessor.process(context.copy(rawMessage = "/adminsuper set$field $rawMessage"))
+                }
                 else -> {
                     commandProcessor.process(context.copy(rawMessage = "/start"))
                 }

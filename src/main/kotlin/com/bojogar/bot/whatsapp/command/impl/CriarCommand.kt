@@ -3,6 +3,7 @@ package com.bojogar.bot.whatsapp.command.impl
 import com.bojogar.bot.dto.request.CreatePeladaRequest
 import com.bojogar.bot.enums.Esporte
 import com.bojogar.bot.service.PeladaService
+import com.bojogar.bot.service.PlatformConfigService
 import com.bojogar.bot.whatsapp.UxCopy
 import com.bojogar.bot.whatsapp.command.BotCommand
 import com.bojogar.bot.whatsapp.command.CommandContext
@@ -22,7 +23,8 @@ import java.time.format.DateTimeParseException
 @Component
 class CriarCommand(
     private val sessionManager: SessionManager,
-    private val peladaService: PeladaService
+    private val peladaService: PeladaService,
+    private val platformConfigService: PlatformConfigService
 ) : BotCommand {
 
     override val name = "/criar"
@@ -32,8 +34,8 @@ class CriarCommand(
         private val log = LoggerFactory.getLogger(CriarCommand::class.java)
         private val DATE_FORMATTER_FULL = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
         private val ZONE_BR = ZoneId.of("America/Sao_Paulo")
-        private val MIN_PRICE = BigDecimal(10)
-        private val MAX_PRICE = BigDecimal(100)
+        private val DEFAULT_MIN_PRICE = BigDecimal(10)
+        private val DEFAULT_MAX_PRICE = BigDecimal(100)
     }
 
     override fun execute(context: CommandContext, whatsappService: WhatsAppService) {
@@ -171,12 +173,14 @@ class CriarCommand(
                     ws.sendMessage(context.from, "\u26A0\uFE0F Não entendi. Digite um número.\n_Ex: 25 ou 0 para gratuita_")
                     return
                 }
-                if (price > BigDecimal.ZERO && price < MIN_PRICE) {
-                    ws.sendMessage(context.from, "\u26A0\uFE0F O mínimo é *R\$ $MIN_PRICE*.\nDigite *0* para gratuita ou um valor a partir de R\$ $MIN_PRICE.")
+                val minPrice = platformConfigService.getMinPrice()
+                val maxPrice = platformConfigService.getMaxPrice()
+                if (price > BigDecimal.ZERO && price < minPrice) {
+                    ws.sendMessage(context.from, "\u26A0\uFE0F O mínimo é *R\$ $minPrice*.\nDigite *0* para gratuita ou um valor a partir de R\$ $minPrice.")
                     return
                 }
-                if (price > MAX_PRICE) {
-                    ws.sendMessage(context.from, "\u26A0\uFE0F O máximo é *R\$ $MAX_PRICE* por jogador.")
+                if (price > maxPrice) {
+                    ws.sendMessage(context.from, "\u26A0\uFE0F O máximo é *R\$ $maxPrice* por jogador.")
                     return
                 }
                 if (price > BigDecimal.ZERO) {
