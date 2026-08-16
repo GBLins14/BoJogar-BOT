@@ -2,6 +2,7 @@ package com.bojogar.bot.whatsapp.command.impl
 
 import com.bojogar.bot.dto.request.CreatePeladaRequest
 import com.bojogar.bot.enums.Esporte
+import com.bojogar.bot.config.WhatsAppProperties
 import com.bojogar.bot.service.PeladaService
 import com.bojogar.bot.service.PlatformConfigService
 import com.bojogar.bot.whatsapp.UxCopy
@@ -24,7 +25,8 @@ import java.time.format.DateTimeParseException
 class CriarCommand(
     private val sessionManager: SessionManager,
     private val peladaService: PeladaService,
-    private val platformConfigService: PlatformConfigService
+    private val platformConfigService: PlatformConfigService,
+    private val whatsAppProperties: WhatsAppProperties
 ) : BotCommand {
 
     override val name = "/criar"
@@ -332,12 +334,28 @@ class CriarCommand(
             sessionManager.clear(context.from)
             log.info("Pelada criada! Código: {} por {}", pelada.codigo, context.from)
 
+            val botPhone = whatsAppProperties.phoneNumber.replace(Regex("[^0-9]"), "")
+            val deepLink = "https://wa.me/$botPhone?text=${pelada.codigo}"
+
             ws.sendMessage(
                 context.from,
                 buildString {
                     append("\u2705 *Pelada criada!*\n\n")
                     append("Código: *${pelada.codigo}*\n\n")
-                    append("Compartilhe esse código com os amigos \u2014 basta enviar aqui no chat para entrar.")
+                    append("_Encaminhe a mensagem abaixo para seus amigos:_")
+                }
+            )
+
+            ws.sendMessage(
+                context.from,
+                buildString {
+                    append("Bora jogar! Entra na pelada comigo! \uD83D\uDCAA\n\n")
+                    append("\uD83C\uDFC6 *${pelada.esporteLabel}*\n")
+                    append("\uD83D\uDCCD ${pelada.local}\n")
+                    append("\uD83D\uDCC5 ${UxCopy.formatDate(pelada.dataHora)}\n")
+                    append("\uD83D\uDC65 ${UxCopy.formatRemaining(pelada.remainingSlots, pelada.limiteJogadores)}\n")
+                    append("\uD83D\uDCB0 ${UxCopy.formatPrice(pelada.valorPorJogador)}\n")
+                    append("\nPara participar, clique no link e envie a mensagem:\n$deepLink")
                 }
             )
 
